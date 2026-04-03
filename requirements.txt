@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+sentence-transformers
+python-dotenv
+pydantic
+pypdf
+python-docx
+python-multipart
+numpy
+requests
+faiss-cpu
+gunicorn==21.2.0

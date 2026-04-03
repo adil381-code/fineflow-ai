@@ -1,0 +1,109 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Nova — FineFlow Assistant</title>
+  <style>
+    body{font-family:Arial,system-ui;background:#f5f7fb;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
+    #box{width:540px;background:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.08);display:flex;flex-direction:column;height:640px;overflow:hidden}
+    #hdr{padding:14px 16px;border-bottom:1px solid #e5e7eb;background:#111827;color:#f9fafb;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+    #hdr span.small{font-size:11px;color:#9ca3af}
+    #msgs{flex:1;padding:18px;overflow:auto;background:#f9fafb}
+    .m{margin:10px 0;max-width:86%;font-size:14px;line-height:1.4}
+    .bot{background:#eef2ff;color:#111;padding:10px 12px;border-radius:10px}
+    .user{background:#2563eb;color:#fff;padding:10px 12px;border-radius:10px;margin-left:auto}
+    #ctrl{display:flex;border-top:1px solid #e5e7eb;padding:10px;background:#fff}
+    #q{flex:1;padding:10px 12px;border-radius:8px;border:1px solid #d1d5db;outline:none;font-size:14px}
+    #q:focus{border-color:#2563eb;box-shadow:0 0 0 1px rgba(37,99,235,.25)}
+    #s{background:#2563eb;color:#fff;border:none;padding:0 16px;border-radius:8px;margin-left:8px;font-size:14px;cursor:pointer}
+    #s:disabled{background:#9ca3af;cursor:not-allowed}
+    #tip{font-size:11px;color:#6b7280;margin-top:4px}
+  </style>
+</head>
+<body>
+  <div id="box">
+    <div id="hdr">
+      <div>
+        Nova — FineFlow Assistant<br>
+        <span class="small">Ask about fines, features, pricing, or appeals.</span>
+      </div>
+      <span class="small">Tip: press Enter to send.</span>
+    </div>
+    <div id="msgs">
+      <div class="m bot">
+        👋 Hi — I’m Nova, your FineFlow assistant. Ask me about fines, features, pricing, or appeals.
+      </div>
+    </div>
+    <div id="ctrl">
+      <div style="flex:1;display:flex;flex-direction:column">
+        <input id="q" placeholder="Ask about FineFlow..." autocomplete="off" />
+        <div id="tip">Tip: keep questions short and specific for best answers.</div>
+      </div>
+      <button id="s">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const sessionId = (() => {
+      let id = localStorage.getItem('nova_session_id');
+      if (!id) {
+        id = 's_' + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem('nova_session_id', id);
+      }
+      return id;
+    })();
+
+    const msgs = document.getElementById("msgs");
+    const q = document.getElementById("q");
+    const s = document.getElementById("s");
+
+    function append(cls, text){
+      const d = document.createElement("div");
+      d.className = "m " + cls;
+      d.innerText = text;
+      msgs.appendChild(d);
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    async function askServer(text){
+      append('user', text);
+      const thinking = document.createElement("div");
+      thinking.className = "m bot";
+      thinking.innerText = "⏳ Nova is thinking...";
+      msgs.appendChild(thinking);
+      msgs.scrollTop = msgs.scrollHeight;
+
+      try {
+        const res = await fetch(`/ask?q=${encodeURIComponent(text)}&session_id=${encodeURIComponent(sessionId)}`);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        thinking.remove();
+        append('bot', data.answer || "⚠️ No answer received.");
+      } catch(e){
+        thinking.remove();
+        append('bot', "⚠️ Error: " + e.message);
+      }
+    }
+
+    s.onclick = () => {
+      const text = q.value.trim();
+      if (!text) return;
+      s.disabled = true;
+      askServer(text).finally(() => {
+        s.disabled = false;
+      });
+      q.value = '';
+      q.focus();
+    };
+
+    q.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        s.click();
+      }
+    });
+
+    q.focus();
+  </script>
+</body>
+</html>

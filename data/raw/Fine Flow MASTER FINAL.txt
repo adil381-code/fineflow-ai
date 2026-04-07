@@ -1,0 +1,198 @@
+# FINE FLOW – MASTER KNOWLEDGE BASE (MARCH 2025)
+
+## PRICING STRUCTURE
+
+We use a combination of a base monthly subscription + a fee per fine processed:
+
+1. **Essential Plan** – £99/month – includes up to 100 fines per month (75p per fine). Additional fines over the limit are charged at £2.50 each.
+2. **Core Plan** – £199/month – includes up to 300 fines per month (75p per fine). Additional fines over the limit are charged at £2.50 each.
+3. **Advanced Plan** – £399/month – includes up to 700 fines per month (75p per fine). Additional fines over the limit are charged at £2.50 each.
+4. **Elite Plan** – £499/month – includes up to 1000 fines per month (75p per fine). Additional fines over the limit are charged at £2.50 each.
+
+**Per‑Fine Fee**: All subscribed clients pay **£0.75 per fine** that goes through the system (pay, appeal, or reassign). This ensures every client pays fairly for usage.
+
+**Pay‑Per‑Fine Option** (for clients who don’t want a subscription):  
+- £2.75 per fine  
+- No monthly commitment  
+- Full access to the platform during use  
+- Ideal for small or trial clients.  
+- To prevent abuse, payment is required upfront or in very short, pre‑paid blocks (e.g., 10 fines at a time).
+
+---
+
+## FREQUENTLY ASKED QUESTIONS
+
+### GENERAL QUESTIONS
+
+**1. What is FineFlow?**  
+FineFlow is an automated fleet fine management platform that handles the entire lifecycle of PCNs — from upload to appeal to payment — saving time and admin costs.
+
+**2. How does FineFlow help fleets?**  
+FineFlow automates PCN processing, reduces manual admin, prevents missed deadlines, and saves companies up to 80% on fine‑related admin costs.
+
+**3. Can FineFlow pay fines on my behalf?**  
+FineFlow handles every stage of a fine except for the final payment. The payment is made directly by the user on the authority’s platform, due to legal and technical restrictions like OTP. FineFlow never stores card data or pays fines on behalf of clients.
+
+**4. Can I reassign a fine to a driver?**  
+Yes. FineFlow allows you to reassign fines directly to a driver or third party with one click. This also counts as one fine handled for billing purposes.
+
+**5. Can I appeal a fine with FineFlow?**  
+Yes. FineFlow has an integrated appeal system. You can trigger an appeal with one click and upload evidence directly.
+
+### PRICING STRUCTURE & PLANS
+
+**6. What are the FineFlow subscription options?**  
+- Essential Plan: £99/month (up to 100 fines)  
+- Core Plan: £199/month (up to 300 fines)  
+- Advanced Plan: £399/month (up to 700 fines)  
+- Elite Plan: £499/month (up to 1000 fines)
+
+**7. What happens if I go over my plan’s fine limit?**  
+Any fine beyond your plan’s included amount is charged at £2.50 per fine.
+
+**8. What does the £0.75 per‑fine fee cover?**  
+It covers the processing of each fine, including payment, appeal, or reassignment. It is charged for every fine handled — regardless of the outcome.
+
+**9. Do I still pay the £0.75 fee if I appeal or reassign a fine?**  
+Yes. Every action — pay, appeal, or reassign — counts as one fine handled and incurs the £0.75 charge.
+
+**10. What if I don’t want a monthly subscription?**  
+You can choose the “Pay Per Fine” option: £2.75 per fine, no monthly fee. Ideal for small or trial users.
+
+**11. Can I pay per fine without subscribing?**  
+Yes. Use our “Pay Per Fine” model — £2.75 per fine, pre‑paid in small blocks (e.g., 10 fines).
+
+### BILLING & PAYMENTS
+
+**12. When am I billed for fine handling?**  
+You can choose from:  
+- Monthly billing (recommended)  
+- Immediate charge per fine  
+- Prepaid top‑up balance
+
+**13. What if I cancel my account — do I still owe for handled fines?**  
+Yes. Any unpaid per‑fine charges must be settled before cancellation is processed.
+
+**14. How does the billing cycle work?**  
+Fines are tracked in real‑time. Your monthly subscription and any over‑limit fines are billed at the end of each month unless using the pre‑paid model.
+
+**15. Can I use multiple cards or assign fines to specific payment methods?**  
+Yes. FineFlow supports multiple saved payment methods and lets you choose per fine if needed.
+
+### FUNCTIONALITY & WORKFLOW
+
+**16. Can I bulk upload fines?**  
+Yes. Upload CSVs or PDF fine batches to bulk import PCNs.
+
+**17. Does FineFlow support appeals for all councils?**  
+We currently support appeals for most UK councils and authorities. Coverage is expanding constantly.
+
+**18. Can I track the appeal status?**  
+Yes. Every fine has a real‑time status — Pending, Appealed, Awaiting Response, Paid, etc.
+
+**19. Do I get notified of urgent fines?**  
+Yes. The system flags urgent fines approaching the deadline so you can act in time.
+
+**20. Is there a dashboard to see all open fines?**  
+Yes. You get a clean dashboard showing all active fines, filters by driver, status, and payment state.
+
+### SECURITY & DATA
+
+**21. Is my card data safe?**  
+Yes. All card data is stored securely via PCI‑DSS‑compliant methods. We never store raw card info ourselves.
+
+**22. Can I remove my card details at any time?**  
+Yes. You can remove or update your payment method at any time from your account settings.
+
+**23. Is FineFlow GDPR compliant?**  
+Yes. We are fully GDPR compliant and never sell or share your data.
+
+### EDGE CASES / CLARITY CHECKS
+
+**24. What if I reassigned a fine, but then paid it — is that 2 fines?**  
+Yes. Each action counts separately. Reassigning = 1 fine handled. Paying it later = another fine handled.
+
+**25. If I appeal and then pay, is that 2 charges?**  
+Correct. Appeal = 1. Pay = 1. Total of 2 × £0.75 charges in your allowance.
+
+**26. What if I just upload the fine but don’t take action — am I charged?**  
+No. Charges apply only when you take action — pay, appeal, or reassign.
+
+**27. What if I reach my 100 fine limit on the Essential Plan?**  
+Any fines over 100 are charged at £2.50 per fine. You can also upgrade your plan to avoid higher costs.
+
+**28. What is the difference between the £2.75 fine fee and the £0.75 fee?**  
+The £2.75 applies to “Pay Per Fine” users with no subscription. The £0.75 is for subscribed users.
+
+---
+
+## ADDITIONAL CONTEXT – FEATURES & WORKFLOW
+
+*(This section contains extra information from the original knowledge bases to provide depth. It does not override the answers above.)*
+
+### How FineFlow Works (Step‑by‑Step)
+
+1. **Email Ingestion**: Connect your fine inbox; FineFlow monitors for incoming fines 24/7, supports all UK authorities.
+2. **OCR & Data Extraction**: AI reads PDFs and images, extracts vehicle reg, date, time, location, amount, deadline (99% accuracy).
+3. **Smart Categorization**: Matches fine to vehicle/driver via uploaded CSV logs; applies decision‑tree logic (Pay, Appeal, Flag).
+4. **Automated Actions**:  
+   - Auto‑Pay: low‑value, clear‑cut fines paid instantly via secure gateway.  
+   - Auto‑Appeal: eligible fines challenged with AI‑generated submissions.  
+   - Flag: unclear cases sent to admin dashboard for quick review.
+5. **Tracking & Reporting**: Real‑time dashboard, audit trail, monthly reports.
+
+### Core Features
+
+- **Email Ingestion & OCR Parsing**: unlimited email accounts, automatic fine detection, support for PDF, JPG, PNG.
+- **Intelligent Decision Engine**: rule‑based automation (you set the rules), learns from historical data.
+- **Automated Payment Processing**: Stripe/GoCardless integration, retry logic, browser automation for authorities without APIs.
+- **Appeal Engine with AI Learning**: rule‑based eligibility, auto‑generates appeal letters, precedent memory.
+- **Driver Matching & Liability Transfer**: CSV upload, automatic driver‑to‑fine matching, Transfer of Liability forms.
+- **Authority Recognition**: database of 400+ UK authorities, authority‑specific rules and deadlines.
+- **Admin Dashboard & Flagging**: clean interface, flagged items with reason codes, one‑click actions.
+- **Audit Trail & Compliance**: immutable logs, exportable reports, GDPR compliant.
+- **Repeat Offender Tracking**: driver profiles, automatic alerts, licence risk warnings.
+- **Deadline Safeguards**: countdown timers, email/SMS alerts, auto‑escalation.
+- **Multi‑Authority Support**: council PCNs, private parking, bus lane, CAZ/ULEZ, congestion charge, toll roads, moving traffic, speeding.
+- **Secure Driver Communication**: optional email/SMS to drivers, one‑click confirmation links.
+
+### Appeal Knowledge (Examples & Success Rates)
+
+- **Council PCN**: success rate 35‑45% informal, 60‑70% at tribunal. Common grounds: inadequate signage, faded markings, faulty meter, medical emergency.
+- **Private Parking**: success rate 45‑55% to POPLA. Grounds: non‑compliant signage, disproportionate charge, grace period not allowed.
+- **Bus Lane**: 25‑35% success; often signage issues.
+- **CAZ/ULEZ**: 40‑50% success; vehicle actually compliant, payment made but not processed.
+- **Congestion Charge**: 35‑45% success; payment made within deadline but not registered, auto‑pay issues.
+- **Toll Road (Dartford)**: 50‑60% success; system errors, payment made before deadline.
+- **Moving Traffic**: 30‑40% success; congestion, signage unclear.
+- **Speeding**: 15‑20% success; signage issues, camera calibration, emergency.
+
+### Real Case Examples
+
+- **Missing Signage – Westminster PCN**: appeal accepted with photo proof of missing signs.
+- **Medical Emergency – Hospital Parking**: appeal accepted on compassionate grounds.
+- **Faulty Parking Meter – Camden PCN**: appeal accepted with evidence of failed payment attempts.
+- **Blue Badge Display Issue**: appeal accepted with warning.
+- **Toll Charge System Error – Dartford**: appeal accepted with bank statement showing payment.
+
+### Unsuccessful Appeals – Learning
+
+- **"Didn't know the rules"**: not a valid defence unless signage deficient.
+- **"Only 5 minutes over"**: not a defence; time limits are absolute.
+
+### Developer Checklist (Feature Overview)
+
+- Email Ingestion & OCR Parsing
+- Fine Categorisation & Decision Tree Logic
+- Payment Gateway Integration
+- Appeal Engine (Rule‑based + precedent memory)
+- Admin Flagging System
+- CSV Import of Driver Logs
+- Local Authority Matching & Portal Syncing
+- Audit Trail & Reporting
+- Repeat Offender Alerts & Watchlists
+- Secure Messaging & Driver Communication
+- Fine Escalation Blocks & Deadline Safeguards
+- Contract Mode & Subscription Enforcement
+- Owner‑Only Financial Dashboard
+- etc.

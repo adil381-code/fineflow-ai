@@ -13,13 +13,12 @@ CHUNKS_TEXT = DATA_DIR / "chunks_text.json"
 CHUNKS_META = DATA_DIR / "chunks_meta.json"
 FAISS_INDEX = DATA_DIR / "faiss.index"
 
-# Embedding model (for CPU this one is good)
-EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
-
-# OpenAI-style chat model (we still call vars GROQ_* to avoid changing imports)
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-GROQ_MODEL = os.getenv("GROQ_MODEL", "gpt-4o")
-GROQ_API_URL = os.getenv("GROQ_API_URL", "https://api.openai.com/v1/chat/completions")
+# OpenAI API Configuration
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
+OPENAI_API_URL = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1/chat/completions")
+OPENAI_EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-ada-002")
+OPENAI_EMBED_API_URL = "https://api.openai.com/v1/embeddings"
 
 # Retrieval settings
 CHUNK_WORDS = int(os.getenv("CHUNK_WORDS", "220"))

@@ -4,20 +4,22 @@ Retriever + index builder (FineFlow, GPT-4o tuned)
 --------------------------------------------------
 - Reads cleaned docs from data/docs_txt
 - Chunks by characters (large, overlapping chunks) so each chunk keeps full context
-- Embeds with SentenceTransformer
+- Embeds with OpenAI embeddings
 - Builds FAISS index (cosine similarity via L2-normalized dot product)
 - search(query) -> list of {chunk, meta, score}
 """
 
 import json
+import re
 from pathlib import Path
 from typing import List, Dict, Any
 
 import numpy as np
+import requests
 
 from app.config import (
     DOCS_TXT, CHUNKS_TEXT, CHUNKS_META, FAISS_INDEX,
-    EMBED_MODEL, TOP_K  # CHUNK_WORDS / CHUNK_OVERLAP no longer used directly
+    OPENAI_API_KEY, OPENAI_EMBED_MODEL, OPENAI_EMBED_API_URL, TOP_K
 )
 from app.logger import logger
 
@@ -27,34 +29,49 @@ try:
 except Exception:
     faiss = None
 
-try:
-    from sentence_transformers import SentenceTransformer
-except Exception:
-    SentenceTransformer = None
-
-logger.info("Retriever starting. EMBED_MODEL=%s, faiss=%s", EMBED_MODEL, bool(faiss))
+logger.info("Retriever starting. OPENAI_EMBED_MODEL=%s, faiss=%s", OPENAI_EMBED_MODEL, bool(faiss))
 
 # Embedding cache
-# Use same stem as FAISS_INDEX for consistency
 try:
     EMB_CACHE_NPY = FAISS_INDEX.with_suffix(".npy")
     EMB_CACHE_META = FAISS_INDEX.with_suffix(".cachemeta.json")
 except Exception:
-    # defensive fallback if FAISS_INDEX isn't a Path
     EMB_CACHE_NPY = Path(str(FAISS_INDEX) + ".npy")
     EMB_CACHE_META = Path(str(FAISS_INDEX) + ".cachemeta.json")
 
-# Global embedding model
-_embed_model = None
-if SentenceTransformer is not None:
+
+def get_openai_embedding(texts: List[str]) -> np.ndarray:
+    """
+    Get embeddings from OpenAI API for a list of texts.
+    Returns numpy array of shape (len(texts), embedding_dim)
+    """
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OpenAI API key not configured")
+    
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": OPENAI_EMBED_MODEL,
+        "input": texts
+    }
+    
     try:
-        _embed_model = SentenceTransformer(EMBED_MODEL)
-        logger.info("Loaded embedding model: %s", EMBED_MODEL)
+        response = requests.post(OPENAI_EMBED_API_URL, headers=headers, json=payload, timeout=60)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Extract embeddings in order
+        embeddings = []
+        for item in sorted(data['data'], key=lambda x: x['index']):
+            embeddings.append(item['embedding'])
+        
+        return np.array(embeddings, dtype=np.float32)
     except Exception as e:
-        logger.exception("Failed to load embed model: %s", e)
-        _embed_model = None
-else:
-    logger.warning("sentence-transformers not installed — embeddings disabled")
+        logger.exception("OpenAI embedding API call failed: %s", e)
+        raise
 
 
 # ---------- Helpers ----------
@@ -160,7 +177,6 @@ def re_tokenize(text: str) -> List[str]:
 
 
 def re_split_non_alnum(text: str) -> List[str]:
-    import re
     return re.split(r"[^0-9a-zA-Z]+", text)
 
 
@@ -168,9 +184,9 @@ def re_split_non_alnum(text: str) -> List[str]:
 
 def build_index(force_rebuild: bool = False):
     """
-    Build FAISS index and save chunks + meta + embeddings to disk.
+    Build FAISS index and save chunks + meta + embeddings to disk using OpenAI embeddings.
     """
-    logger.info("Building index (force_rebuild=%s)...", force_rebuild)
+    logger.info("Building index with OpenAI embeddings (force_rebuild=%s)...", force_rebuild)
 
     all_chunks: List[str] = []
     metas: List[Dict[str, Any]] = []
@@ -204,7 +220,7 @@ def build_index(force_rebuild: bool = False):
     if not all_chunks:
         raise RuntimeError("No chunks built from docs — nothing to index.")
 
-    # 3) Load or compute embeddings
+    # 3) Load or compute embeddings with OpenAI
     embeddings = None
     if EMB_CACHE_NPY.exists() and EMB_CACHE_META.exists() and not force_rebuild:
         try:
@@ -224,20 +240,24 @@ def build_index(force_rebuild: bool = False):
             embeddings = None
 
     if embeddings is None:
-        if _embed_model is None:
-            raise RuntimeError("Embedding model not available (SentenceTransformer failed to load).")
-        logger.info("Encoding %d chunks...", len(all_chunks))
-        batch_size = 32
+        if not OPENAI_API_KEY:
+            raise RuntimeError("OpenAI API key not configured for embeddings.")
+        
+        logger.info("Encoding %d chunks with OpenAI embeddings...", len(all_chunks))
+        
+        # Process in batches to avoid rate limits (max 2048 texts per batch for ada-002)
+        batch_size = 100
         embs_list = []
+        
         for i in range(0, len(all_chunks), batch_size):
             batch = all_chunks[i:i + batch_size]
-            emb = _embed_model.encode(batch, convert_to_numpy=True, show_progress_bar=False)
-            # ensure float32
-            if emb.dtype != np.float32:
-                emb = emb.astype("float32")
+            logger.info(f"Encoding batch {i//batch_size + 1}/{(len(all_chunks)-1)//batch_size + 1}")
+            emb = get_openai_embedding(batch)
             embs_list.append(emb)
+        
         embeddings = np.vstack(embs_list)
-        # normalize embeddings for cosine via IP
+        
+        # Save cache
         np.save(EMB_CACHE_NPY, embeddings)
         EMB_CACHE_META.write_text(json.dumps(metas, ensure_ascii=False), encoding="utf8")
         logger.info("Saved embedding cache: %s", EMB_CACHE_NPY)
@@ -264,12 +284,13 @@ def build_index(force_rebuild: bool = False):
 
 def load_index():
     """
-    Load FAISS index + chunks + meta + embedding model.
+    Load FAISS index + chunks + meta.
+    Returns (embed_model, index, chunks, metas)
     """
     if faiss is None:
         raise RuntimeError("faiss not installed; cannot load index.")
-    if _embed_model is None:
-        raise RuntimeError("Embedding model not available (SentenceTransformer failed to load).")
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OpenAI API key not configured.")
     if not FAISS_INDEX.exists():
         raise FileNotFoundError("FAISS index missing — run build_index() first.")
 
@@ -279,12 +300,12 @@ def load_index():
     if len(chunks) != len(metas):
         logger.warning("chunks/meta length mismatch (%d vs %d)", len(chunks), len(metas))
     logger.info("Loaded index & chunks (count=%d)", len(chunks))
-    return _embed_model, index, chunks, metas
+    return "openai", index, chunks, metas
 
 
 def search(query: str, top_k: int = TOP_K) -> List[Dict[str, Any]]:
     """
-    Embed query, search FAISS, return top_k results:
+    Embed query with OpenAI, search FAISS, return top_k results:
     [{ "chunk": str, "meta": {...}, "score": float }, ...]
     """
     try:
@@ -296,11 +317,16 @@ def search(query: str, top_k: int = TOP_K) -> List[Dict[str, Any]]:
     if not query:
         return []
 
-    # encode and ensure float32 and normalized
-    q_emb = model.encode([query], convert_to_numpy=True)
-    if q_emb.dtype != np.float32:
-        q_emb = q_emb.astype("float32")
-    faiss.normalize_L2(q_emb)
+    # Get embedding for query using OpenAI
+    try:
+        q_emb = get_openai_embedding([query])
+        if q_emb.dtype != np.float32:
+            q_emb = q_emb.astype("float32")
+        faiss.normalize_L2(q_emb)
+    except Exception as e:
+        logger.exception("Failed to get embedding for query: %s", e)
+        return []
+
     try:
         D, I = index.search(q_emb, top_k)
     except Exception as e:

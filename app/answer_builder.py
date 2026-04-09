@@ -13,7 +13,7 @@ from typing import List, Dict, Any, Optional
 
 import requests
 import numpy as np
-import faiss  # <--- IMPORTANT: added missing import
+import faiss
 from app.logger import logger
 
 # ----------------------------
@@ -196,6 +196,64 @@ def enforce_rate_limit(session_id: str):
     _LAST_CALL_TS[session_id] = time.time()
 
 # ----------------------------
+# OpenAI Embedding function for FAQ
+# ----------------------------
+def get_openai_embedding_single(text: str) -> np.ndarray:
+    """Get embedding from OpenAI API for a single text."""
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OpenAI API key not configured")
+    
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": "text-embedding-ada-002",
+        "input": [text]
+    }
+    
+    try:
+        response = requests.post("https://api.openai.com/v1/embeddings", headers=headers, json=payload, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        return np.array(data['data'][0]['embedding'], dtype=np.float32)
+    except Exception as e:
+        logger.exception("OpenAI embedding API call failed: %s", e)
+        raise
+
+
+def get_openai_embedding_batch(texts: List[str]) -> np.ndarray:
+    """Get embeddings from OpenAI API for a list of texts."""
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OpenAI API key not configured")
+    
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": "text-embedding-ada-002",
+        "input": texts
+    }
+    
+    try:
+        response = requests.post("https://api.openai.com/v1/embeddings", headers=headers, json=payload, timeout=60)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Extract embeddings in order
+        embeddings = []
+        for item in sorted(data['data'], key=lambda x: x['index']):
+            embeddings.append(item['embedding'])
+        
+        return np.array(embeddings, dtype=np.float32)
+    except Exception as e:
+        logger.exception("OpenAI embedding API call failed: %s", e)
+        raise
+
+# ----------------------------
 # Intent detection + helpers
 # ----------------------------
 _EXPAND_KW = [
@@ -271,10 +329,9 @@ def strip_markdown(text: str) -> str:
 _FAQ_QUESTIONS: List[str] = []
 _FAQ_ANSWERS: List[str] = []
 _FAQ_EMBEDDINGS: Optional[np.ndarray] = None
-_EMBED_MODEL = None  # will be set from retriever
 
 def load_faq():
-    global _FAQ_QUESTIONS, _FAQ_ANSWERS, _FAQ_EMBEDDINGS, _EMBED_MODEL
+    global _FAQ_QUESTIONS, _FAQ_ANSWERS, _FAQ_EMBEDDINGS
     if not os.path.exists(FAQ_PATH):
         logger.warning("FAQ file not found at %s – FAQ matching disabled.", FAQ_PATH)
         return
@@ -284,31 +341,23 @@ def load_faq():
         _FAQ_QUESTIONS = [item["question"] for item in faq_data]
         _FAQ_ANSWERS = [item["answer"] for item in faq_data]
 
-        # Import embedding model from retriever (must be loaded)
-        try:
-            from app.retriever import _embed_model as embed_model
-            _EMBED_MODEL = embed_model
-        except Exception:
-            logger.exception("Could not get embedding model for FAQ matching")
+        # Compute embeddings for FAQ questions using OpenAI
+        if not OPENAI_API_KEY:
+            logger.warning("OpenAI API key not available – FAQ matching disabled.")
             return
 
-        if _EMBED_MODEL is None:
-            logger.warning("Embedding model not available – FAQ matching disabled.")
-            return
-
-        # Compute embeddings for FAQ questions
-        logger.info("Computing embeddings for %d FAQ questions...", len(_FAQ_QUESTIONS))
-        batch_size = 32
+        logger.info("Computing OpenAI embeddings for %d FAQ questions...", len(_FAQ_QUESTIONS))
+        batch_size = 100
         embs = []
         for i in range(0, len(_FAQ_QUESTIONS), batch_size):
             batch = _FAQ_QUESTIONS[i:i+batch_size]
-            emb = _EMBED_MODEL.encode(batch, convert_to_numpy=True)
+            emb = get_openai_embedding_batch(batch)
             if emb.dtype != np.float32:
                 emb = emb.astype("float32")
             embs.append(emb)
         _FAQ_EMBEDDINGS = np.vstack(embs)
         # Normalise for cosine similarity
-        faiss.normalize_L2(_FAQ_EMBEDDINGS)   # now faiss is imported
+        faiss.normalize_L2(_FAQ_EMBEDDINGS)
         logger.info("FAQ embeddings ready.")
     except Exception as e:
         logger.exception("Failed to load FAQ: %s", e)
@@ -318,20 +367,23 @@ def load_faq():
 
 def match_faq(query: str, threshold: float = 0.80) -> Optional[str]:
     """Return exact answer if query matches a FAQ question with similarity > threshold."""
-    if _FAQ_EMBEDDINGS is None or _EMBED_MODEL is None:
+    if _FAQ_EMBEDDINGS is None or not OPENAI_API_KEY:
         return None
     # embed query
-    q_emb = _EMBED_MODEL.encode([query], convert_to_numpy=True)
-    if q_emb.dtype != np.float32:
-        q_emb = q_emb.astype("float32")
-    faiss.normalize_L2(q_emb)
-    # compute cosine similarity
-    sim = np.dot(_FAQ_EMBEDDINGS, q_emb.T).flatten()
-    best_idx = np.argmax(sim)
-    best_score = sim[best_idx]
-    if best_score > threshold:
-        logger.info("FAQ match with score %.4f for: %s", best_score, query)
-        return _FAQ_ANSWERS[best_idx]
+    try:
+        q_emb = get_openai_embedding_single(query)
+        if q_emb.dtype != np.float32:
+            q_emb = q_emb.astype("float32")
+        faiss.normalize_L2(q_emb)
+        # compute cosine similarity
+        sim = np.dot(_FAQ_EMBEDDINGS, q_emb.T).flatten()
+        best_idx = np.argmax(sim)
+        best_score = sim[best_idx]
+        if best_score > threshold:
+            logger.info("FAQ match with score %.4f for: %s", best_score, query)
+            return _FAQ_ANSWERS[best_idx]
+    except Exception as e:
+        logger.exception("FAQ matching failed: %s", e)
     return None
 
 # ----------------------------
@@ -341,7 +393,7 @@ try:
     from app.retriever import load_index
     _EMBED_MODEL, _FAISS_INDEX, _CHUNKS, _METAS = load_index()
     logger.info("Retriever loaded at startup: chunks=%d", len(_CHUNKS) if _CHUNKS else 0)
-    # Now load FAQ (depends on _EMBED_MODEL)
+    # Now load FAQ (depends on OpenAI API)
     load_faq()
 except Exception as e:
     logger.warning("Initial load_index failed: %s", e)
@@ -379,16 +431,16 @@ def synthesize_from_rag(hits: List[Dict[str, Any]]) -> str:
     return " ".join(dict.fromkeys(sentences[:2]))
 
 # ----------------------------
-# LLM call
+# LLM call (OpenAI only)
 # ----------------------------
-HEADERS = {"Authorization": f"Bearer {GROQ_API_KEY}"} if OPENAI_API_KEY else {}
+HEADERS = {"Authorization": f"Bearer {OPENAI_API_KEY}"} if OPENAI_API_KEY else {}
 
 def llm_call(system: str, user: str, max_tokens: int = 250, retries: int = 3, timeout: int = 30) -> str:
     prompt_key = f"SYSTEM={system}\nUSER={user}"
     key = str(abs(hash(prompt_key)))
     if key in _LLM_CACHE:
         return _LLM_CACHE[key]
-    if not GROQ_API_KEY:
+    if not OPENAI_API_KEY:
         logger.warning("No API key configured; skipping LLM call.")
         return ""
     payload = {
@@ -405,7 +457,7 @@ def llm_call(system: str, user: str, max_tokens: int = 250, retries: int = 3, ti
     for attempt in range(1, retries + 1):
         try:
             r = requests.post(
-                GROQ_API_URL,
+                OPENAI_API_URL,
                 headers={**HEADERS, "Content-Type": "application/json"},
                 json=payload,
                 timeout=timeout,
@@ -669,7 +721,7 @@ def answer_sync(q: str, session_id: str = "default") -> Dict[str, Any]:
         }
 
 logger.info(
-    "Nova answer_builder (Hybrid RAG + GPT-4o + Persona Engine) loaded. LLM enabled=%s, model=%s",
+    "Nova answer_builder (Hybrid RAG + OpenAI + Persona Engine) loaded. LLM enabled=%s, model=%s",
     bool(OPENAI_API_KEY),
     OPENAI_MODEL,
 )

@@ -14,6 +14,7 @@ import re
 from pathlib import Path
 from typing import List, Dict, Any
 
+
 import numpy as np
 import requests
 
@@ -39,6 +40,10 @@ except Exception:
     EMB_CACHE_NPY = Path(str(FAISS_INDEX) + ".npy")
     EMB_CACHE_META = Path(str(FAISS_INDEX) + ".cachemeta.json")
 
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 def get_openai_embedding(texts: List[str]) -> np.ndarray:
     """

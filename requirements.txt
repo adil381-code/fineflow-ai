@@ -1,7 +1,9 @@
 fastapi
-uvicorn
+uvicorn[standard]
 python-dotenv
 pydantic
 numpy
 requests
 chromadb
+pypdf
+docx2txt

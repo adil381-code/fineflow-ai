@@ -1,7 +1,7 @@
 # app/answer_builder.py
 """
 Nova — FineFlow Answer Builder (Hybrid RAG + GPT-4o + Persona Engine)
-with exact FAQ matching for core questions.
+with structured facts fallback and ChromaDB retriever.
 """
 
 import os
@@ -10,10 +10,11 @@ import json
 import re
 import threading
 from typing import List, Dict, Any, Optional
+from pathlib import Path
 
 import requests
 import numpy as np
-import faiss
+
 from app.logger import logger
 
 # ----------------------------
@@ -37,24 +38,91 @@ SUPPORT_EMAIL = os.getenv("SUPPORT_EMAIL", "support@fineflow.com")
 SALES_EMAIL = os.getenv("SALES_EMAIL", "sales@fineflow.com")
 
 # ----------------------------
-# Retriever import (defensive)
+# Structured Facts
 # ----------------------------
-try:
-    from app.retriever import load_index, search as rag_search_impl, rerank_hits
-except Exception as e:
-    logger.warning("Could not import retriever (or rerank_hits): %s", e)
-    try:
-        from app.retriever import load_index, search as rag_search_impl
-    except Exception:
-        def load_index():
-            return None, None, [], []
-        def rag_search_impl(q, top_k=TOP_K):
-            return []
-    def rerank_hits(hits, q):
-        return hits
+STRUCTURED_FACTS_PATH = Path(__file__).parent / "data" / "structured_facts.json"
+_STRUCTURED_FACTS = {}
+if STRUCTURED_FACTS_PATH.exists():
+    with open(STRUCTURED_FACTS_PATH, 'r', encoding='utf8') as f:
+        _STRUCTURED_FACTS = json.load(f)
+
+def get_fact_from_structured(query: str) -> Optional[str]:
+    """Return precise answer from structured facts if query matches."""
+    q = query.lower()
+    plans = _STRUCTURED_FACTS.get("plans", {})
+    # Plan details
+    for plan_name, details in plans.items():
+        if plan_name.lower() in q:
+            if "price" in q or "cost" in q or "month" in q:
+                return f"The {plan_name} plan costs £{details['price']}/month."
+            if "credit" in q:
+                return f"The {plan_name} plan includes {details['credits']} credits."
+            if "vehicle" in q and "limit" in q:
+                return f"The {plan_name} plan supports {details['vehicle_limit']} vehicles."
+            # Generic plan info
+            if any(kw in q for kw in ["plan", "subscription"]):
+                return (f"The {plan_name} plan: £{details['price']}/month, "
+                        f"{details['credits']} credits, {details['vehicle_limit']} vehicles.")
+    # All plans list
+    if any(kw in q for kw in ["all plans", "list plans", "available plans"]):
+        lines = ["Fine Flow subscription plans:"]
+        for name, det in plans.items():
+            lines.append(f"- {name}: £{det['price']}/month, {det['credits']} credits, {det['vehicle_limit']} vehicles")
+        return "\n".join(lines)
+    # Per-fine rate
+    if "per fine" in q or "per-fine" in q:
+        return f"The per-fine rate is £{_STRUCTURED_FACTS.get('per_fine_rate')}."
+    # Overage
+    if "overage" in q:
+        return f"Overage rate is £{_STRUCTURED_FACTS.get('overage_rate')} per fine."
+    # Vehicle overage charge
+    if ("exceed" in q or "over" in q) and "vehicle" in q and "limit" in q:
+        return f"Exceeding the vehicle limit incurs a £{_STRUCTURED_FACTS.get('vehicle_overage_charge')} charge per vehicle."
+    # Referral rewards
+    if "refer" in q:
+        # Vehicle count based reward
+        match = re.search(r'(\d+)\s*vehicle', q)
+        if match:
+            count = int(match.group(1))
+            rewards = _STRUCTURED_FACTS.get("referral_rewards", {})
+            for rng, val in rewards.items():
+                if '-' in rng:
+                    low, high = map(int, rng.split('-'))
+                    if low <= count <= high:
+                        return f"For a fleet of {count} vehicles, you'll receive {val} credits."
+                elif rng.endswith('+'):
+                    low = int(rng[:-1])
+                    if count >= low:
+                        return f"For a fleet of {count} vehicles, you'll receive {val} credits."
+        # Tiers
+        if "tier" in q:
+            tiers = _STRUCTURED_FACTS.get("referral_tiers", {})
+            lines = ["Referral Tiers:"]
+            for name, info in tiers.items():
+                lines.append(f"- {name}: {info['referrals']} referrals → {info['reward']}")
+            return "\n".join(lines)
+        # New joiner reward
+        if "new" in q or "join" in q:
+            return f"New companies joining with a referral code receive £{_STRUCTURED_FACTS.get('new_joiner_reward')} worth of credits."
+    # Elite vehicle limit override (important for memory consistency)
+    if "elite" in q and "vehicle" in q and "limit" in q:
+        return "The Elite plan has an unlimited vehicle limit."
+    return None
 
 # ----------------------------
-# Optional Redis session backing
+# Retriever import
+# ----------------------------
+try:
+    from app.retriever import search as rag_search_impl, rerank_hits, build_index, load_index
+except Exception as e:
+    logger.warning("Could not import retriever: %s", e)
+    def rag_search_impl(q, top_k=TOP_K): return []
+    def rerank_hits(hits, q): return hits
+    def build_index(force_rebuild=False): pass
+    def load_index(): return None, None, [], []
+
+# ----------------------------
+# Redis session (optional)
 # ----------------------------
 _redis_client = None
 try:
@@ -63,12 +131,9 @@ try:
         import redis
         _redis_client = redis.from_url(REDIS_URL, decode_responses=True)
         _redis_client.ping()
-        logger.info("Redis session store enabled (REDIS_URL provided).")
-    else:
-        _redis_client = None
+        logger.info("Redis session store enabled.")
 except Exception as e:
-    logger.warning("Redis unavailable; falling back to in-memory sessions: %s", e)
-    _redis_client = None
+    logger.warning("Redis unavailable; using in-memory sessions: %s", e)
 
 # ----------------------------
 # Persona & prompts
@@ -77,29 +142,30 @@ NOVA_UNIVERSAL_PROMPT = (
     "You are Nova, the intelligent, calm, and highly capable assistant behind Fine Flow — "
     "an advanced fleet fine management system.\n"
     "Be human, professional, and helpful. Never break immersion or say you are an AI.\n"
-    "**Always give very concise answers.** Use 1‑2 sentences unless the user explicitly asks for more detail.\n"
-    "When listing multiple items (like pricing plans), use bullet points.\n"
+    "**Always give concise answers.** Use 1‑2 sentences unless the user explicitly asks for more detail.\n"
+    "When listing multiple items (like pricing plans or referral tiers), **always include the complete list** "
+    "as provided in the retrieved excerpts. Use bullet points.\n"
     "Never add extra commentary or explanations beyond what is asked.\n"
     "Always use the retrieved document excerpts to ground your answers. "
-    "Do NOT print internal filenames (e.g. 'faq.txt') to end users.\n"
-    "Output plain text only – no markdown formatting like asterisks (**) or backticks."
+    "Do NOT print internal filenames.\n"
+    "Output plain text only – no markdown formatting."
 )
 
 SALES_NOVA_PROMPT = (
     "You are Sales Nova. Tone: confident, benefit-driven, persuasive but honest. "
     "Lead with pain points and ROI, end with a clear call to action (book demo / contact sales). "
-    "Be extremely concise – 1‑2 sentences. Use bullet points only if listing."
+    "Be concise. Use bullet points only if listing."
 )
 
 TECH_NOVA_PROMPT = (
     "You are Tech Nova. Tone: calm, expert, non-condescending. Explain system behaviour, integrations, security, "
-    "and troubleshooting without revealing proprietary internals. Keep it to 1‑2 sentences."
+    "and troubleshooting without revealing proprietary internals. Keep it short."
 )
 
 LEGAL_NOVA_PROMPT = (
     "You are Legal Nova. Explain timelines and procedural info about fines/appeals. Always include this disclaimer:\n"
     "\"Please note: I can't provide legal advice. I can only explain how Fine Flow works and what the general process usually involves.\"\n"
-    "Do NOT give specific legal advice or predictive outcomes. Keep it short (1‑2 sentences)."
+    "Do NOT give specific legal advice or predictive outcomes."
 )
 
 def build_system_prompt(mode: str) -> str:
@@ -131,7 +197,6 @@ try:
     _LLM_CACHE = json.loads(open(LLM_CACHE_PATH, "r", encoding="utf8").read()) if os.path.exists(LLM_CACHE_PATH) else {}
 except Exception:
     _LLM_CACHE = {}
-
 try:
     _LLM_COUNTER = json.loads(open(LLM_COUNTER_PATH, "r", encoding="utf8").read()) if os.path.exists(LLM_COUNTER_PATH) else {"calls": 0}
 except Exception:
@@ -142,26 +207,23 @@ def _save_llm_cache():
         with open(LLM_CACHE_PATH, "w", encoding="utf8") as f:
             json.dump(_LLM_CACHE, f, ensure_ascii=False, indent=2)
     except Exception:
-        logger.exception("Failed to save LLM cache")
+        pass
 
 def _increment_llm_calls():
     try:
-        _LLM_COUNTER["calls"] = _LLM_COUNTER.get("calls", 0) + 1
+        _LLM_COUNTER["calls"] += 1
         with open(LLM_COUNTER_PATH, "w", encoding="utf8") as f:
             json.dump(_LLM_COUNTER, f, ensure_ascii=False)
     except Exception:
-        logger.exception("Failed to increment LLM call counter")
+        pass
 
 def _get_session(session_id: str) -> List[Dict[str, str]]:
     if _redis_client:
         key = f"nova:session:{session_id}"
         try:
             raw = _redis_client.get(key)
-            if not raw:
-                return []
-            return json.loads(raw)
+            return json.loads(raw) if raw else []
         except Exception:
-            logger.exception("Redis read failed for session; falling back to empty session.")
             return []
     with _LOCK:
         return _SESSION_STORE.setdefault(session_id, [])
@@ -176,10 +238,10 @@ def _add_to_session(session_id: str, role: str, content: str):
             max_len = CHAT_HISTORY_TURNS * 4
             if len(cur) > max_len:
                 cur = cur[-max_len:]
-            _redis_client.set(key, json.dumps(cur), ex=60 * 60 * 24)
+            _redis_client.set(key, json.dumps(cur), ex=60*60*24)
             return
         except Exception:
-            logger.exception("Redis write failed; falling back to in-memory session.")
+            pass
     with _LOCK:
         hist = _SESSION_STORE.setdefault(session_id, [])
         hist.append(record)
@@ -196,125 +258,125 @@ def enforce_rate_limit(session_id: str):
     _LAST_CALL_TS[session_id] = time.time()
 
 # ----------------------------
-# OpenAI Embedding function for FAQ
+# OpenAI Embedding helpers (for FAQ)
 # ----------------------------
 def get_openai_embedding_single(text: str) -> np.ndarray:
-    """Get embedding from OpenAI API for a single text."""
     if not OPENAI_API_KEY:
         raise RuntimeError("OpenAI API key not configured")
-    
-    headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    payload = {
-        "model": "text-embedding-ada-002",
-        "input": [text]
-    }
-    
-    try:
-        response = requests.post("https://api.openai.com/v1/embeddings", headers=headers, json=payload, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        return np.array(data['data'][0]['embedding'], dtype=np.float32)
-    except Exception as e:
-        logger.exception("OpenAI embedding API call failed: %s", e)
-        raise
-
+    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+    payload = {"model": "text-embedding-3-small", "input": [text]}
+    r = requests.post("https://api.openai.com/v1/embeddings", headers=headers, json=payload, timeout=30)
+    r.raise_for_status()
+    data = r.json()
+    return np.array(data['data'][0]['embedding'], dtype=np.float32)
 
 def get_openai_embedding_batch(texts: List[str]) -> np.ndarray:
-    """Get embeddings from OpenAI API for a list of texts."""
     if not OPENAI_API_KEY:
         raise RuntimeError("OpenAI API key not configured")
-    
-    headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    payload = {
-        "model": "text-embedding-ada-002",
-        "input": texts
-    }
-    
-    try:
-        response = requests.post("https://api.openai.com/v1/embeddings", headers=headers, json=payload, timeout=60)
-        response.raise_for_status()
-        data = response.json()
-        
-        # Extract embeddings in order
-        embeddings = []
-        for item in sorted(data['data'], key=lambda x: x['index']):
-            embeddings.append(item['embedding'])
-        
-        return np.array(embeddings, dtype=np.float32)
-    except Exception as e:
-        logger.exception("OpenAI embedding API call failed: %s", e)
-        raise
+    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+    payload = {"model": "text-embedding-3-small", "input": texts}
+    r = requests.post("https://api.openai.com/v1/embeddings", headers=headers, json=payload, timeout=60)
+    r.raise_for_status()
+    data = r.json()
+    embeddings = [item["embedding"] for item in sorted(data["data"], key=lambda x: x["index"])]
+    return np.array(embeddings, dtype=np.float32)
 
 # ----------------------------
-# Intent detection + helpers
+# FAQ Matcher
 # ----------------------------
-_EXPAND_KW = [
-    "expand", "explain in detail", "explain more", "in detail", "detailed",
-    "long answer", "step by step", "how does it work", "how it works",
-    "tell me more", "explain the process", "what is the process"
-]
+_FAQ_QUESTIONS: List[str] = []
+_FAQ_ANSWERS: List[str] = []
+_FAQ_EMBEDDINGS: Optional[np.ndarray] = None
+
+def load_faq():
+    global _FAQ_QUESTIONS, _FAQ_ANSWERS, _FAQ_EMBEDDINGS
+    if not os.path.exists(FAQ_PATH):
+        return
+    try:
+        with open(FAQ_PATH, "r", encoding="utf8") as f:
+            faq_data = json.load(f)
+        _FAQ_QUESTIONS = [item["question"] for item in faq_data]
+        _FAQ_ANSWERS = [item["answer"] for item in faq_data]
+        if not OPENAI_API_KEY:
+            return
+        logger.info("Computing embeddings for %d FAQ questions...", len(_FAQ_QUESTIONS))
+        batch_size = 100
+        embs = []
+        for i in range(0, len(_FAQ_QUESTIONS), batch_size):
+            batch = _FAQ_QUESTIONS[i:i+batch_size]
+            emb = get_openai_embedding_batch(batch)
+            embs.append(emb)
+        _FAQ_EMBEDDINGS = np.vstack(embs)
+        # Normalize for cosine similarity
+        from numpy.linalg import norm
+        _FAQ_EMBEDDINGS = _FAQ_EMBEDDINGS / norm(_FAQ_EMBEDDINGS, axis=1, keepdims=True)
+        logger.info("FAQ embeddings ready.")
+    except Exception as e:
+        logger.exception("Failed to load FAQ: %s", e)
+
+def match_faq(query: str, threshold: float = 0.80) -> Optional[str]:
+    if _FAQ_EMBEDDINGS is None or not OPENAI_API_KEY:
+        return None
+    try:
+        q_emb = get_openai_embedding_single(query)
+        q_emb = q_emb / np.linalg.norm(q_emb)
+        sim = np.dot(_FAQ_EMBEDDINGS, q_emb)
+        best_idx = np.argmax(sim)
+        best_score = sim[best_idx]
+        if best_score > threshold:
+            return _FAQ_ANSWERS[best_idx]
+    except Exception:
+        pass
+    return None
+
+# ----------------------------
+# Intent detection
+# ----------------------------
+_EXPAND_KW = ["expand", "explain in detail", "explain more", "in detail", "detailed", "step by step", "how does it work", "tell me more"]
 _SHORT_KW = ["short", "brief", "concise", "in short", "summary", "one line", "one sentence"]
-_FACTUAL_KW = ["price", "pricing", "cost", "how much", "monthly", "per month", "plan", "plans", "subscription", "license", "fee", "terms", "contract", "sla", "gdpr", "data protection"]
-_SUPPORT_KW = ["password", "login", "log in", "forgot password", "reset", "sign in", "how to use", "get started", "setup", "onboarding"]
-_EMOTIONAL_KW = ["sad", "upset", "angry", "frustrated", "wtf", "shit", "damn", "hate", "lost memory", "did you forget"]
+_FACTUAL_KW = ["price", "pricing", "cost", "how much", "monthly", "plan", "subscription", "fee"]
+_SUPPORT_KW = ["password", "login", "forgot", "reset", "sign in", "setup", "onboarding"]
+_EMOTIONAL_KW = ["sad", "upset", "angry", "frustrated", "wtf", "shit", "damn", "hate"]
 
 def user_requests_expansion(q: str) -> bool:
-    t = (q or "").lower()
-    return any(kw in t for kw in _EXPAND_KW)
-
+    return any(kw in q.lower() for kw in _EXPAND_KW)
 def user_requests_short(q: str) -> bool:
-    t = (q or "").lower()
-    return any(kw in t for kw in _SHORT_KW)
-
+    return any(kw in q.lower() for kw in _SHORT_KW)
 def is_factual_query(q: str) -> bool:
-    t = (q or "").lower()
-    if not any(kw in t for kw in _FACTUAL_KW):
-        return False
-    if re.search(r"\b(\$|£|€|\d+|how much|per month|monthly|cost|price)\b", t):
-        return True
-    return False
-
+    return any(kw in q.lower() for kw in _FACTUAL_KW) or bool(re.search(r"\b(\$|£|€|\d+|how much|per month|monthly|cost|price)\b", q.lower()))
 def is_support_query(q: str) -> bool:
-    t = (q or "").lower()
-    return any(kw in t for kw in _SUPPORT_KW)
-
+    return any(kw in q.lower() for kw in _SUPPORT_KW)
 def is_emotional(q: str) -> bool:
-    t = (q or "").lower()
-    return any(kw in t for kw in _EMOTIONAL_KW)
-
+    return any(kw in q.lower() for kw in _EMOTIONAL_KW)
 def detect_mode(q: str) -> str:
-    t = (q or "").lower()
-    if any(w in t for w in ["appeal", "pcn", "penalty charge", "fine deadline", "what happens if i ignore"]):
-        return "legal"
-    if any(w in t for w in ["secure", "security", "encryption", "gdpr", "api", "integrate", "integration", "tech stack", "database", "ocr", "csv", "dropbox"]):
-        return "tech"
-    if any(w in t for w in ["why should i use", "why use", "benefit", "roi", "return on investment", "better than", "competitor", "cost", "pricing", "price", "trial", "subscription"]):
-        return "sales"
+    t = q.lower()
+    if any(w in t for w in ["appeal", "pcn", "penalty", "fine deadline"]): return "legal"
+    if any(w in t for w in ["security", "encryption", "gdpr", "api", "integrate", "tech"]): return "tech"
+    if any(w in t for w in ["why use", "benefit", "roi", "better than", "competitor", "cost", "pricing", "trial"]): return "sales"
     return "universal"
 
-def shorten_text(text: str, max_sentences: int) -> str:
+def shorten_text(text: str, max_sentences: int, preserve_lists: bool = True) -> str:
     if not text:
         return text
+    # If bullet list present, preserve structure
+    if preserve_lists and re.search(r'(^|\n)\s*[-*•]', text):
+        # Extract bullet items
+        items = re.split(r'\n\s*[-*•]\s*', text.strip())
+        if len(items) > 1:
+            # First part before first bullet might be intro, skip or keep?
+            # Simple: return all items if few, else truncate
+            if len(items) <= 5:
+                return "\n- " + "\n- ".join(items).strip()
+            else:
+                return "\n- " + "\n- ".join(items[:5]).strip() + "\n- ..."
     parts = re.split(r"(?<=[.!?])\s+", text.strip())
     parts = [p.strip() for p in parts if p.strip()]
     if len(parts) <= max_sentences:
-        return " ".join(parts).strip()
-    out = " ".join(parts[:max_sentences]).strip()
-    if not out.endswith((".", "!", "?")):
-        out += "..."
-    return out
+        return " ".join(parts)
+    return " ".join(parts[:max_sentences]) + "..."
 
 def strip_markdown(text: str) -> str:
-    if not text:
-        return text
+    if not text: return text
     text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
     text = re.sub(r'\*([^*]+)\*', r'\1', text)
     text = re.sub(r'`([^`]+)`', r'\1', text)
@@ -324,329 +386,163 @@ def strip_markdown(text: str) -> str:
     return text
 
 # ----------------------------
-# FAQ Matcher (exact Q&A) 
-# ----------------------------
-_FAQ_QUESTIONS: List[str] = []
-_FAQ_ANSWERS: List[str] = []
-_FAQ_EMBEDDINGS: Optional[np.ndarray] = None
-
-def load_faq():
-    global _FAQ_QUESTIONS, _FAQ_ANSWERS, _FAQ_EMBEDDINGS
-    if not os.path.exists(FAQ_PATH):
-        logger.warning("FAQ file not found at %s – FAQ matching disabled.", FAQ_PATH)
-        return
-    try:
-        with open(FAQ_PATH, "r", encoding="utf8") as f:
-            faq_data = json.load(f)
-        _FAQ_QUESTIONS = [item["question"] for item in faq_data]
-        _FAQ_ANSWERS = [item["answer"] for item in faq_data]
-
-        # Compute embeddings for FAQ questions using OpenAI
-        if not OPENAI_API_KEY:
-            logger.warning("OpenAI API key not available – FAQ matching disabled.")
-            return
-
-        logger.info("Computing OpenAI embeddings for %d FAQ questions...", len(_FAQ_QUESTIONS))
-        batch_size = 100
-        embs = []
-        for i in range(0, len(_FAQ_QUESTIONS), batch_size):
-            batch = _FAQ_QUESTIONS[i:i+batch_size]
-            emb = get_openai_embedding_batch(batch)
-            if emb.dtype != np.float32:
-                emb = emb.astype("float32")
-            embs.append(emb)
-        _FAQ_EMBEDDINGS = np.vstack(embs)
-        # Normalise for cosine similarity
-        faiss.normalize_L2(_FAQ_EMBEDDINGS)
-        logger.info("FAQ embeddings ready.")
-    except Exception as e:
-        logger.exception("Failed to load FAQ: %s", e)
-        _FAQ_QUESTIONS = []
-        _FAQ_ANSWERS = []
-        _FAQ_EMBEDDINGS = None
-
-def match_faq(query: str, threshold: float = 0.80) -> Optional[str]:
-    """Return exact answer if query matches a FAQ question with similarity > threshold."""
-    if _FAQ_EMBEDDINGS is None or not OPENAI_API_KEY:
-        return None
-    # embed query
-    try:
-        q_emb = get_openai_embedding_single(query)
-        if q_emb.dtype != np.float32:
-            q_emb = q_emb.astype("float32")
-        faiss.normalize_L2(q_emb)
-        # compute cosine similarity
-        sim = np.dot(_FAQ_EMBEDDINGS, q_emb.T).flatten()
-        best_idx = np.argmax(sim)
-        best_score = sim[best_idx]
-        if best_score > threshold:
-            logger.info("FAQ match with score %.4f for: %s", best_score, query)
-            return _FAQ_ANSWERS[best_idx]
-    except Exception as e:
-        logger.exception("FAQ matching failed: %s", e)
-    return None
-
-# ----------------------------
-# Retriever load at startup
-# ----------------------------
-try:
-    from app.retriever import load_index
-    _EMBED_MODEL, _FAISS_INDEX, _CHUNKS, _METAS = load_index()
-    logger.info("Retriever loaded at startup: chunks=%d", len(_CHUNKS) if _CHUNKS else 0)
-    # Now load FAQ (depends on OpenAI API)
-    load_faq()
-except Exception as e:
-    logger.warning("Initial load_index failed: %s", e)
-    _EMBED_MODEL = None
-    _FAISS_INDEX = None
-    _CHUNKS = []
-    _METAS = []
-
-def rag_search(query: str, top_k: int = TOP_K):
-    try:
-        hits = rag_search_impl(query, top_k=top_k)
-        try:
-            hits = rerank_hits(hits, query)
-        except Exception:
-            pass
-        return hits
-    except Exception as e:
-        logger.exception("rag_search_impl failed: %s", e)
-        return []
-
-def synthesize_from_rag(hits: List[Dict[str, Any]]) -> str:
-    if not hits:
-        return ""
-    sentences = []
-    for h in hits[:3]:
-        chunk = (h.get("chunk") or h.get("text") or "").strip()
-        if not chunk:
-            continue
-        first = re.split(r"(?<=[.!?])\s+", chunk)[0].strip()
-        if first:
-            sentences.append(first)
-    if not sentences:
-        return ""
-    # limit to 2 sentences for conciseness
-    return " ".join(dict.fromkeys(sentences[:2]))
-
-# ----------------------------
-# LLM call (OpenAI only)
+# LLM call
 # ----------------------------
 HEADERS = {"Authorization": f"Bearer {OPENAI_API_KEY}"} if OPENAI_API_KEY else {}
 
-def llm_call(system: str, user: str, max_tokens: int = 250, retries: int = 3, timeout: int = 30) -> str:
+def llm_call(system: str, user: str, max_tokens: int = 350, retries: int = 3) -> str:
     prompt_key = f"SYSTEM={system}\nUSER={user}"
     key = str(abs(hash(prompt_key)))
     if key in _LLM_CACHE:
         return _LLM_CACHE[key]
     if not OPENAI_API_KEY:
-        logger.warning("No API key configured; skipping LLM call.")
         return ""
     payload = {
         "model": OPENAI_MODEL,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
         "temperature": 0.18,
         "max_tokens": max_tokens,
-        "top_p": 1,
     }
     backoff = 1.0
-    for attempt in range(1, retries + 1):
+    for attempt in range(retries):
         try:
-            r = requests.post(
-                OPENAI_API_URL,
-                headers={**HEADERS, "Content-Type": "application/json"},
-                json=payload,
-                timeout=timeout,
-            )
+            r = requests.post(OPENAI_API_URL, headers={**HEADERS, "Content-Type": "application/json"}, json=payload, timeout=30)
             if r.status_code == 429:
-                logger.warning("LLM rate limited (429), attempt=%d", attempt)
                 time.sleep(backoff)
                 backoff *= 2
                 continue
             r.raise_for_status()
-            j = r.json()
-            if isinstance(j, dict):
-                choices = j.get("choices")
-                if isinstance(choices, list) and choices:
-                    msg = choices[0].get("message") or {}
-                    content = msg.get("content")
-                    if isinstance(content, str):
-                        ans = content.strip()
-                        _LLM_CACHE[key] = ans
-                        _save_llm_cache()
-                        _increment_llm_calls()
-                        return ans
-            logger.warning("LLM returned unexpected JSON shape")
-            return ""
-        except requests.RequestException as e:
-            logger.warning("LLM HTTP error attempt=%d: %s", attempt, e)
-            time.sleep(backoff)
-            backoff *= 2
+            ans = r.json()["choices"][0]["message"]["content"].strip()
+            _LLM_CACHE[key] = ans
+            _save_llm_cache()
+            _increment_llm_calls()
+            return ans
         except Exception as e:
-            logger.exception("LLM unexpected error attempt=%d: %s", attempt, e)
+            logger.warning("LLM attempt %d failed: %s", attempt, e)
             time.sleep(backoff)
             backoff *= 2
-    logger.error("LLM exhausted retries")
     return ""
 
 # ----------------------------
 # Prompt builder
 # ----------------------------
-def build_user_prompt(question: str, intent: str, rag_hits: List[Dict[str, Any]], session_history: List[Dict[str, str]]) -> str:
-    history_text = ""
-    if session_history:
-        last = session_history[-6:]
-        history_text = "\n".join([f"{m['role']}: {m['content']}" for m in last])
-    retrieved_block = ""
-    for i, h in enumerate((rag_hits or [])[:min(len(rag_hits), TOP_K)]):
-        meta = h.get("meta") or {}
-        source = meta.get("source") or meta.get("title") or f"doc_{i+1}"
-        chunk = (h.get("chunk") or h.get("text") or "").replace("\n", " ")
-        snippet = chunk[:800].strip()
-        if snippet:
-            retrieved_block += f"[{i+1}] SOURCE_META: {source}\n{snippet}\n\n"
-    user_prompt = f"""
+def build_user_prompt(question: str, intent: str, rag_hits: List[Dict], history: List[Dict]) -> str:
+    hist_text = "\n".join([f"{m['role']}: {m['content']}" for m in history[-6:]]) if history else "<none>"
+    retrieved = ""
+    for i, h in enumerate(rag_hits[:TOP_K]):
+        meta = h.get("meta", {})
+        src = meta.get("title", meta.get("source", f"doc_{i+1}"))
+        chunk = h.get("chunk", "").replace("\n", " ")[:800]
+        retrieved += f"[{i+1}] SOURCE: {src}\n{chunk}\n\n"
+    return f"""
 User question:
 {question}
 
 Intent: {intent}
 
-Conversation history (most recent):
-{history_text or '<none>'}
+Conversation history (recent):
+{hist_text}
 
-Retrieved document excerpts (top {min(len(rag_hits), TOP_K)}):
-{retrieved_block or '<none>'}
+Retrieved excerpts (top {len(rag_hits[:TOP_K])}):
+{retrieved or '<none>'}
 
-Instructions to Nova:
-- Use retrieved excerpts to ground factual answers. Do NOT print backend filenames.
-- If the user asks for a hard factual item (pricing, plan names, exact fees, contract terms, legal advice) and there is no supporting excerpt above, do NOT invent numbers. Instead point to support/sales.
-- **Be extremely concise:** answer in 1‑2 sentences. Use bullet points only for lists (e.g., pricing plans).
-- If the question is a common FAQ, match the tone and exact phrasing from the FAQ.
-- Do not add explanations unless the user asks "how" or "why". Just give the direct answer.
+Instructions:
+- Use excerpts to ground answers. Do not invent numbers.
+- Be concise: 1‑2 sentences unless asked for detail.
+- For lists, provide all items from excerpts using bullet points.
+- If factual info missing, direct to support/sales.
 Answer now:
 """
-    return user_prompt
+
+def synthesize_from_rag(hits: List[Dict]) -> str:
+    if not hits:
+        return ""
+    sentences = []
+    for h in hits[:3]:
+        chunk = h.get("chunk", "").strip()
+        if chunk:
+            first = re.split(r"(?<=[.!?])\s+", chunk)[0]
+            sentences.append(first)
+    return " ".join(dict.fromkeys(sentences[:2]))
+
+def _sanitize_user_answer(ans: str) -> str:
+    ans = re.sub(r"\s*\(Source:\s*[^\)]+\)", "", ans, flags=re.IGNORECASE)
+    ans = re.sub(r"\bSource:\s*[^\.\n]+", "", ans, flags=re.IGNORECASE)
+    ans = re.sub(r"SOURCE_META:\s*[^\.\n]+", "", ans, flags=re.IGNORECASE)
+    return re.sub(r"\s{2,}", " ", ans).strip()
 
 # ----------------------------
 # Main builder
 # ----------------------------
-def _sanitize_user_answer(final_answer: str) -> str:
-    try:
-        final_answer = re.sub(r"\s*\(Source:\s*[^\)]+\)", "", final_answer, flags=re.IGNORECASE)
-        final_answer = re.sub(r"\bSource:\s*[^\.\n]+", "", final_answer, flags=re.IGNORECASE)
-        final_answer = re.sub(r"SOURCE_META:\s*[^\.\n]+", "", final_answer, flags=re.IGNORECASE)
-        final_answer = re.sub(r"\s{2,}", " ", final_answer).strip()
-    except Exception:
-        return final_answer
-    return final_answer
-
-def build_response(question: str, session_id: str = "default", allow_tools: bool = True) -> Dict[str, Any]:
-    q = (question or "").strip()
+def build_response(question: str, session_id: str = "default") -> Dict[str, Any]:
+    q = question.strip()
     if not session_id:
         session_id = "default"
 
-    try:
-        _add_to_session(session_id, "user", q)
-    except Exception:
-        logger.exception("Failed to add user turn to session")
-
+    _add_to_session(session_id, "user", q)
     enforce_rate_limit(session_id)
 
+    # Quick canned responses
     if not q:
         reply = "I didn't catch that — what would you like to know about Fine Flow?"
-        try:
-            _add_to_session(session_id, "assistant", reply)
-        except Exception:
-            pass
-        return {"answer": reply, "confidence": 1.0, "sources": [], "tools": {"recommended": None, "executed": None}, "flag": False}
-
+        _add_to_session(session_id, "assistant", reply)
+        return {"answer": reply, "confidence": 1.0, "sources": [], "flag": False}
     lower_q = q.lower()
     if is_emotional(lower_q):
-        canned = "I'm sorry this has been frustrating. Tell me what's wrong and I'll walk you through it."
-        try:
-            _add_to_session(session_id, "assistant", canned)
-        except Exception:
-            pass
-        return {"answer": canned, "confidence": 1.0, "sources": [], "tools": {"recommended": None, "executed": None}, "flag": False}
-
+        reply = "I'm sorry this has been frustrating. Tell me what's wrong and I'll walk you through it."
+        _add_to_session(session_id, "assistant", reply)
+        return {"answer": reply, "confidence": 1.0, "sources": [], "flag": False}
     if re.search(r"\b(hi|hello|hey|good morning|good afternoon|good evening)\b", lower_q):
-        canned = "Hi, I'm Nova from Fine Flow. How can I help you today?"
-        try:
-            _add_to_session(session_id, "assistant", canned)
-        except Exception:
-            pass
-        return {"answer": canned, "confidence": 1.0, "sources": [], "tools": {"recommended": None, "executed": None}, "flag": False}
-
+        reply = "Hi, I'm Nova from Fine Flow. How can I help you today?"
+        _add_to_session(session_id, "assistant", reply)
+        return {"answer": reply, "confidence": 1.0, "sources": [], "flag": False}
     if any(x in lower_q for x in ["who are you", "what is nova", "who is nova"]):
-        canned = "I'm Nova, Fine Flow's assistant. I help fleets manage fines and appeals."
-        try:
-            _add_to_session(session_id, "assistant", canned)
-        except Exception:
-            pass
-        return {"answer": canned, "confidence": 1.0, "sources": [], "tools": {"recommended": None, "executed": None}, "flag": False}
-
+        reply = "I'm Nova, Fine Flow's assistant. I help fleets manage fines and appeals."
+        _add_to_session(session_id, "assistant", reply)
+        return {"answer": reply, "confidence": 1.0, "sources": [], "flag": False}
     if is_support_query(lower_q):
-        reply = f"Use the 'Forgot password' link on the login page or contact support at {SUPPORT_EMAIL} for quick help."
-        try:
-            _add_to_session(session_id, "assistant", reply)
-        except Exception:
-            pass
-        return {"answer": reply, "confidence": 1.0, "sources": [], "tools": {"recommended": "contact_support", "executed": None}, "flag": False}
+        reply = f"Use the 'Forgot password' link on the login page or contact support at {SUPPORT_EMAIL}."
+        _add_to_session(session_id, "assistant", reply)
+        return {"answer": reply, "confidence": 1.0, "sources": [], "flag": False}
 
-    # --- FAQ MATCHING (threshold lowered to 0.80) ---
+    # Structured facts check (override RAG)
+    fact_answer = get_fact_from_structured(q)
+    if fact_answer:
+        _add_to_session(session_id, "assistant", fact_answer)
+        return {"answer": fact_answer, "confidence": 1.0, "sources": [], "flag": False}
+
+    # FAQ matching
     faq_answer = match_faq(q, threshold=0.80)
     if faq_answer:
-        try:
-            _add_to_session(session_id, "assistant", faq_answer)
-        except Exception:
-            pass
-        return {"answer": faq_answer, "confidence": 1.0, "sources": [], "tools": {"recommended": None, "executed": None}, "flag": False}
+        _add_to_session(session_id, "assistant", faq_answer)
+        return {"answer": faq_answer, "confidence": 1.0, "sources": [], "flag": False}
 
-    # --- RAG search ---
+    # RAG search
     try:
-        rag_hits = rag_search(q, top_k=TOP_K)
-    except Exception as e:
-        logger.exception("RAG search failed: %s", e)
+        rag_hits = rag_search_impl(q, top_k=TOP_K)
+        rag_hits = rerank_hits(rag_hits, q)
+    except Exception:
         rag_hits = []
-
-    hits_count = len(rag_hits) if rag_hits else 0
-    top_score = float(rag_hits[0].get("score", 0.0)) if hits_count else 0.0
-    logger.info("RAG search results: hits=%d top_score=%.4f (q=%s)", hits_count, top_score, q[:120])
+    top_score = rag_hits[0]["score"] if rag_hits else 0.0
 
     factual = is_factual_query(q)
     mode = detect_mode(q)
+    history = _get_session(session_id)
 
     if factual and not rag_hits:
-        reply = f"I don't have that exact detail. Please contact support at {SUPPORT_EMAIL} or sales at {SALES_EMAIL} for precise figures."
-        logger.info("Factual fallback (no docs): %s", q[:120])
-        try:
-            _add_to_session(session_id, "assistant", reply)
-        except Exception:
-            pass
-        return {"answer": reply, "confidence": 0.0, "sources": [], "tools": {"recommended": "contact_support", "executed": None}, "flag": True}
+        reply = f"I don't have that exact detail. Please contact support at {SUPPORT_EMAIL} or sales at {SALES_EMAIL}."
+        _add_to_session(session_id, "assistant", reply)
+        return {"answer": reply, "confidence": 0.0, "sources": [], "flag": True}
 
-    history = _get_session(session_id)
     system_prompt = build_system_prompt(mode)
     user_prompt = build_user_prompt(q, "factual" if factual else "conversational", rag_hits, history)
 
     final_raw = ""
     if OPENAI_API_KEY:
-        try:
-            llm_out = llm_call(system_prompt, user_prompt)
-            if llm_out:
-                final_raw = llm_out.strip()
-            else:
-                logger.warning("LLM returned empty; falling back to synthesizer.")
-                final_raw = synthesize_from_rag(rag_hits) or ""
-        except Exception as e:
-            logger.exception("LLM call failed: %s", e)
-            final_raw = synthesize_from_rag(rag_hits) or ""
+        llm_out = llm_call(system_prompt, user_prompt)
+        final_raw = llm_out if llm_out else synthesize_from_rag(rag_hits)
     else:
-        final_raw = synthesize_from_rag(rag_hits) or ""
+        final_raw = synthesize_from_rag(rag_hits)
 
     want_expand = user_requests_expansion(q)
     want_short = user_requests_short(q)
@@ -655,73 +551,29 @@ def build_response(question: str, session_id: str = "default", allow_tools: bool
     elif want_short:
         final_answer = shorten_text(final_raw, max_sentences=1)
     else:
-        final_answer = shorten_text(final_raw, max_sentences=2)   # default to 2 sentences
+        final_answer = shorten_text(final_raw, max_sentences=2)
 
     if not final_answer.strip():
-        if factual:
-            final_answer = f"I don't have that detail. Contact {SUPPORT_EMAIL} for exact information."
-            flag = True
-        else:
-            synth = synthesize_from_rag(rag_hits)
-            if synth:
-                final_answer = shorten_text(synth, max_sentences=2)
-                flag = False
-            else:
-                final_answer = f"I don't have documents on that. Contact {SUPPORT_EMAIL} for help."
-                flag = False
+        final_answer = f"I don't have documents on that. Contact {SUPPORT_EMAIL} for help."
+        flag = True
     else:
         flag = (top_score < CONFIDENCE_THRESHOLD)
 
     final_answer = _sanitize_user_answer(final_answer)
     final_answer = strip_markdown(final_answer)
-
     if len(final_answer) > 500:
-        truncated = final_answer[:497]
-        last_period = truncated.rfind('.')
-        last_exclamation = truncated.rfind('!')
-        last_question = truncated.rfind('?')
-        last_boundary = max(last_period, last_exclamation, last_question)
-        if last_boundary > 400:
-            final_answer = truncated[:last_boundary + 1]
-        else:
-            final_answer = truncated + "..."
+        final_answer = final_answer[:497] + "..."
 
-    try:
-        _add_to_session(session_id, "assistant", final_answer)
-    except Exception:
-        pass
+    _add_to_session(session_id, "assistant", final_answer)
 
-    sources = []
-    for h in (rag_hits or [])[:TOP_K]:
-        meta = h.get("meta") or {}
-        title = meta.get("title") or meta.get("source") or "doc"
-        sources.append({"title": title, "score": float(h.get("score", 0.0))})
+    sources = [{"title": h.get("meta", {}).get("title", "doc"), "score": h["score"]} for h in rag_hits[:TOP_K]]
+    return {"answer": final_answer, "confidence": top_score, "sources": sources, "flag": flag}
 
-    return {
-        "answer": final_answer,
-        "confidence": float(top_score),
-        "sources": sources,
-        "tools": {"recommended": None, "executed": None},
-        "flag": bool(flag),
-    }
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
 def answer_sync(q: str, session_id: str = "default") -> Dict[str, Any]:
     try:
-        out = build_response(q, session_id=session_id)
-        out["confidence"] = float(out.get("confidence", 0.0))
-        return out
+        return build_response(q, session_id)
     except Exception:
         logger.exception("answer_sync failed")
-        return {
-            "answer": "Internal error answering your question.",
-            "confidence": 0.0,
-            "sources": [],
-            "tools": {},
-            "flag": True,
-        }
+        return {"answer": "Internal error.", "confidence": 0.0, "sources": [], "flag": True}
 
-logger.info(
-    "Nova answer_builder (Hybrid RAG + OpenAI + Persona Engine) loaded. LLM enabled=%s, model=%s",
-    bool(OPENAI_API_KEY),
-    OPENAI_MODEL,
-)
+logger.info("Nova answer_builder loaded. LLM enabled=%s, model=%s", bool(OPENAI_API_KEY), OPENAI_MODEL)

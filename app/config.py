@@ -1,3 +1,4 @@
+# app/config.py
 from pathlib import Path
 import os
 from dotenv import load_dotenv
@@ -9,15 +10,13 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 RAW_DIR = DATA_DIR / "raw"
 DOCS_TXT = DATA_DIR / "docs_txt"
-CHUNKS_TEXT = DATA_DIR / "chunks_text.json"
-CHUNKS_META = DATA_DIR / "chunks_meta.json"
-FAISS_INDEX = DATA_DIR / "faiss.index"
+CHROMA_DB_DIR = DATA_DIR / "chroma_db"
 
 # OpenAI API Configuration
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 OPENAI_API_URL = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1/chat/completions")
-OPENAI_EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-ada-002")
+OPENAI_EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
 OPENAI_EMBED_API_URL = "https://api.openai.com/v1/embeddings"
 
 # Retrieval settings
@@ -34,3 +33,4 @@ CHAT_HISTORY_TURNS = int(os.getenv("CHAT_HISTORY_TURNS", "20"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 RAW_DIR.mkdir(parents=True, exist_ok=True)
 DOCS_TXT.mkdir(parents=True, exist_ok=True)
+CHROMA_DB_DIR.mkdir(parents=True, exist_ok=True)

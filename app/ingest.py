@@ -1,3 +1,4 @@
+# app/ingest.py
 """
 Robust ingest for FineFlow-RAG:
 - Extracts text from PDF/DOCX/TXT

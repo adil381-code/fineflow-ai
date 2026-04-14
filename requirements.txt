@@ -4,4 +4,4 @@ python-dotenv
 pydantic
 numpy
 requests
-faiss-cpu
+chromadb

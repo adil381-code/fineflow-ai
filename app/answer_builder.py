@@ -238,4 +238,4 @@ def answer_sync(q: str, session_id: str = "default") -> Dict[str, Any]:
         logger.exception("answer_sync failed")
         return {"answer": "Internal error.", "confidence": 0.0, "sources": [], "flag": True}
 
-logger.info("✅ Nova answer_builder loaded — golden KB + RAG fallback, memory enabled.")
+logger.info(" Nova answer_builder loaded — golden KB + RAG fallback, memory enabled.")

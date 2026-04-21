@@ -1,0 +1,32 @@
+2026-04-16 16:02:13,287 INFO Starting ingest from D:\fineflow-rag-clean\data\raw
+2026-04-16 16:02:13,302 INFO Wrote: Fine Flow MASTER FINAL.txt
+2026-04-16 16:02:13,302 INFO Ingest finished. written=1 skipped=0
+2026-04-16 16:02:36,326 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-ada-002, using ChromaDB
+2026-04-16 16:02:36,326 INFO Building index with OpenAI embeddings (force_rebuild=True)...
+2026-04-16 16:02:36,356 INFO Cleared existing Chroma collection.
+2026-04-16 16:02:36,376 INFO Generating embeddings for 7 chunks...
+2026-04-16 16:02:38,977 INFO Indexed batch 1/1
+2026-04-16 16:02:38,977 INFO Index built. Total chunks=7
+2026-04-16 16:03:12,688 INFO Starting ingest from D:\fineflow-rag-clean\data\raw
+2026-04-16 16:03:12,692 INFO Wrote: Fine Flow MASTER FINAL.txt
+2026-04-16 16:03:12,693 INFO Ingest finished. written=1 skipped=0
+2026-04-16 16:03:17,664 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-ada-002, using ChromaDB
+2026-04-16 16:03:17,665 INFO Building index with OpenAI embeddings (force_rebuild=True)...
+2026-04-16 16:03:17,673 INFO Cleared existing Chroma collection.
+2026-04-16 16:03:17,691 INFO Generating embeddings for 7 chunks...
+2026-04-16 16:03:22,891 INFO Indexed batch 1/1
+2026-04-16 16:03:22,891 INFO Index built. Total chunks=7
+2026-04-16 16:03:49,932 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-ada-002, using ChromaDB
+2026-04-16 16:03:50,287 INFO ChromaDB index found.
+2026-04-21 11:27:36,066 INFO Starting ingest from D:\fineflow-rag-clean\data\raw
+2026-04-21 11:27:36,070 INFO Wrote: Fine Flow MASTER FINAL.txt
+2026-04-21 11:27:36,070 INFO Ingest finished. written=1 skipped=0
+2026-04-21 11:28:37,539 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-ada-002, using ChromaDB
+2026-04-21 11:28:37,540 INFO Building index with OpenAI embeddings (force_rebuild=True)...
+2026-04-21 11:28:37,551 INFO Cleared existing Chroma collection.
+2026-04-21 11:28:37,570 INFO Generating embeddings for 7 chunks...
+2026-04-21 11:28:40,972 INFO Indexed batch 1/1
+2026-04-21 11:28:40,973 INFO Index built. Total chunks=7
+2026-04-21 11:28:57,317 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-ada-002, using ChromaDB
+2026-04-21 11:28:57,328 INFO Loaded 26 golden Q&A pairs.
+2026-04-21 11:28:58,885 INFO ChromaDB index found.

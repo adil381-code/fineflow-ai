@@ -2,8 +2,3 @@ venv/
 __pycache__/
 *.pyc
 .env
-
-# ignore everything inside data EXCEPT raw
-data/*
-!data/raw/
-!data/raw/*

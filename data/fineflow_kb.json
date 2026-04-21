@@ -1,0 +1,184 @@
+[
+  {
+    "id": "FF-001",
+    "category": "core_overview",
+    "question": "What does Fine Flow actually do?",
+    "answer": "Fine Flow is an automated system for managing fines from start to finish. It captures incoming fines, extracts the key details, assigns responsibility, tracks decisions, supports disputes and can even spot an appealable fine and construct the appeal for you. All whilst ensuring everything is resolved on time. Instead of manually chasing emails, checking deadlines, and managing drivers, Fine Flow keeps the entire process organised, accountable, and under control. Want a breakdown of how it all works?",
+    "follow_up": "Would you like me to break that down step by step, from the moment a fine arrives to the moment it is resolved?"
+  },
+  {
+    "id": "FF-002",
+    "category": "fine_lifecycle",
+    "question": "What happens to a fine once it comes into the system?",
+    "answer": "Once a fine enters the system, Fine Flow extracts the key details - including the amount, PCN/reference number, vehicle registration, issue date and location. It then compares this against your driver data and logs (uploaded via CSV or entered in the system), using vehicle, date, and time matching to identify who was responsible. If a match is found, the fine is assigned automatically. If not, its placed into an unassigned queue for quick manual review, so nothing gets missed or delayed. Want me to walk you through how assignment works in more detail?",
+    "follow_up": "Would you like me to explain how the matching process works, or how urgency is prioritised after a fine is created?"
+  },
+  {
+    "id": "FF-003",
+    "category": "email_ingestion",
+    "question": "How does Fine Flow get my fines in the first place?",
+    "answer": "Fine Flow connects to your fine-handling email flow and detects incoming penalty notices automatically. It identifies fine-related messages, extracts the relevant information and turns them into structured records inside the system, so your team does not have to manually copy data out of emails or attachments. The point is to stop fines living in scattered inboxes and move them into a controlled workflow immediately. Alternatively, an admin can manually upload fines into the system and Fine Flow will extract the key details that way without connecting to an inbox. The choice is yours.",
+    "follow_up": "Would you like me to explain how the inbox connection works, or how Fine Flow avoids processing unrelated emails?"
+  },
+  {
+    "id": "FF-004",
+    "category": "trust_privacy",
+    "question": "Are you reading all of my emails?",
+    "answer": "No. Fine Flow is used against your fine-handling email flow, not as a general mailbox reader for unrelated messages. It is there to identify and process penalty notices, not to scan private correspondence. In practice, the safest setup is a dedicated fines inbox or routing rule so only fine-related messages are handled by the platform.",
+    "follow_up": "Would you like me to explain the difference between connecting a main inbox and using a dedicated fines inbox?"
+  },
+  {
+    "id": "FF-005",
+    "category": "trust_privacy",
+    "question": "What happens if the inbox receives the wrong kind of email by mistake?",
+    "answer": "If an email does not look like a genuine fine, Fine Flow does not turn it blindly into a live record. It either ignores it or places it into a review queue if confidence is unclear. That way, nothing important is lost, but unrelated emails do not pollute the system either. Fine Flow is designed to handle messy real-world input safely rather than assuming every incoming message is perfect.",
+    "follow_up": "Would you like me to explain how the review queue works for uncertain or partially matched emails?"
+  },
+  {
+    "id": "FF-006",
+    "category": "matching",
+    "question": "How does Fine Flow know which driver a fine belongs to?",
+    "answer": "Fine Flow uses your driver data to work out responsibility automatically. It compares each fine against your uploaded logs — checking the vehicle, date, and time to see who was using it. When there's a clear match, it assigns it instantly. If not, it highlights it for review so the process keeps moving without errors or delays.",
+    "follow_up": "Would you like me to explain what happens when there is no clear match, or what kind of data makes matching more accurate?"
+  },
+  {
+    "id": "FF-007",
+    "category": "matching",
+    "question": "What happens if a fine cannot be matched to a driver?",
+    "answer": "If a fine can't be matched automatically, it's flagged for review — nothing breaks and nothing gets missed. You can assign it in seconds using the vehicle or driver details, and the process continues as normal.",
+    "follow_up": "Would you like me to explain what the unassigned review queue looks like, or how admins resolve unmatched fines quickly?"
+  },
+  {
+    "id": "FF-008",
+    "category": "driver_logs",
+    "question": "Do I need driver logs for Fine Flow to work?",
+    "answer": "No. Driver logs improve automation, reduce admin time for you and make matching much more accurate, but they are not a hard requirement. If logs are missing, Fine Flow still captures, tracks and organises the fines; it simply means more of the assignment work is handled manually. The system remains useful with imperfect data, not only with ideal data.",
+    "follow_up": "Would you like me to explain how CSV uploads help the system, or how manual assignment works without logs?"
+  },
+  {
+    "id": "FF-009",
+    "category": "csv_imports",
+    "question": "What do the CSV uploads actually do?",
+    "answer": "CSV uploads give Fine Flow structured data it can work with quickly. That usually includes driver information, vehicle relationships and activity windows, which helps the system match fines correctly instead of relying on guesswork. In simple terms, the better your uploaded data is, the more Fine Flow can automate for you. When the data is incomplete, the system still work, but with more manual review.",
+    "follow_up": "Would you like me to explain what kind of CSV data gives the best matching results?"
+  },
+  {
+    "id": "FF-010",
+    "category": "payments",
+    "question": "Do you automatically pay fines for me?",
+    "answer": "No - and that's intentional. Government and authority payment systems are heavily protected, with bot detection, session controls, and security layers that prevent reliable automation. They all block automation for payment because of issuing card verification requirements. Trying to bypass that would be unstable and risky, so payments are always completed by you on the authority's site - they have to be. What Fine Flow does is everything around that step. It captures incoming fines automatically, extracts all key details, assigns responsibility using your driver data, tracks deadlines, flags risk, and keeps everything organised so nothing is missed. It also supports disputes, logs outcomes, and gives you a clear, structured view of every fine across your operation. Fines are grouped, prioritised, and ready to process, so you can handle multiple fines in one go without switching between relevant authority systems. By the time you reach payment, there's no thinking left - just click the link and complete it. What normally takes hours of chasing, checking and managing is reduced to a simple, controlled process.",
+    "follow_up": "Would you like me to explain how Payment Mode works, or why Fine Flow still saves so much time even though payment itself remains manual?"
+  },
+  {
+    "id": "FF-011",
+    "category": "payments",
+    "question": "If payment is still manual, how does Fine Flow actually save time?",
+    "answer": "Because the payment itself is only the final click. The real time is normally wasted chasing emails, reading attachments, pulling out PCN details, matching the driver, checking deadlines, deciding what needs urgent attention and keeping records straight. Fine Flow removes almost all of that. By the time someone is ready to pay, the fine has already been captured, organised, prioritised and prepared, so the remaining step is quick and controlled. Paying the fine on your behalf is not possible with UK authority portals.",
+    "follow_up": "Would you like me to explain how fines can be grouped by authority to make high-volume payment sessions much faster?"
+  },
+  {
+    "id": "FF-012",
+    "category": "payments",
+    "question": "Can Fine Flow help me process lots of fines for the same authority?",
+    "answer": "Yes. Even without automating the external payment portal itself, Fine Flow still makes bulk processing practical by grouping fines by authority, sorting them by urgency and presenting them in a structured payment workflow. That means your team can work through a batch in one session instead of jumping between emails, spreadsheets and different bits of information. The time saving comes from removing the chaos around the payment, even though the authority still requires the final action to be completed on its own site.",
+    "follow_up": "Would you like me to explain fast batch processing?"
+  },
+  {
+    "id": "FF-013",
+    "category": "payments",
+    "question": "What happens after I click Pay Now?",
+    "answer": "When you click Pay Now, Fine Flow opens the relevant authority payment page and keeps the fine in an awaiting-payment state until the admin confirms the payment has actually been completed. At that point, the system logs the time, updates the status and can store supporting proof such as a receipt or confirmation reference. The important part is that the workflow stays structured and traceable, even though the payment is completed outside the platform.",
+    "follow_up": "Would you like me to explain how payment confirmation and receipt tracking works so the audit trail stays strong?"
+  },
+  {
+    "id": "FF-014",
+    "category": "appeals",
+    "question": "Can you help me appeal a fine?",
+    "answer": "Yes — Fine Flow doesn't just manage appeals, it learns from them. It generates an appeal using the fine details and historical outcomes, and can send it directly to the issuing authority. Over time, it adapts based on wins and rejections, refining its approach and giving you a success probability so you can make better decisions before submitting.",
+    "follow_up": "Would you like me to explain how Fine Flow generates appeals and learns from past results?"
+  },
+  {
+    "id": "FF-015",
+    "category": "appeals_intelligence",
+    "question": "How does Fine Flow make appeals smarter over time?",
+    "answer": "Fine Flow does not treat each appeal as an isolated event. It tracks outcomes, learns from what has been accepted or rejected before, and uses that history to improve future recommendations. Over time, that allows the system to estimate the probability of success, generate stronger draft appeals and adapt its logic based on what actually works in practice rather than repeating the same wording forever.",
+    "follow_up": "Would you like me to explain how win percentages are displayed, or how the system uses past outcomes when generating a new appeal?"
+  },
+  {
+    "id": "FF-016",
+    "category": "appeals_generation",
+    "question": "Does Fine Flow write the appeal for me?",
+    "answer": "Yes. Fine Flow can generate a draft appeal using the fine details, the reason selected or spotted by the system and the history of what has worked before. That gives the user a strong starting point instead of asking them to write everything from scratch. The goal is not just to store appeals, but to create better ones faster and more consistently.",
+    "follow_up": "Would you like me to explain how generated appeals can be reviewed, edited and sent to the issuing authority?"
+  },
+  {
+    "id": "FF-017",
+    "category": "appeals_generation",
+    "question": "Can Fine Flow send the appeal to the issuing authority for me?",
+    "answer": "Yes, where the workflow supports it. Fine Flow prepares the appeal, attaches the relevant evidence and sends it through the configured submission route so the user does not have to piece everything together manually. The key value is that the appeal remains linked to the fine, tracked properly and visible throughout its lifecycle, rather than disappearing into an email chain.",
+    "follow_up": "Would you like me to explain how appeal statuses such as under review, accepted and rejected are tracked inside the system?"
+  },
+  {
+    "id": "FF-018",
+    "category": "appeals_probability",
+    "question": "What does the win percentage mean on an appeal?",
+    "answer": "The win percentage is a guidance signal, not a guarantee. It reflects how likely a similar appeal is to succeed based on past results, matched patterns and the quality of evidence available. Its job is to help users make better decisions before submitting, such as whether a case looks strong, weak or worth reviewing further. The more real outcomes the system captures, the more useful that percentage becomes.",
+    "follow_up": "Would you like me to explain what factors influence that win probability, such as authority, reason type and evidence quality?"
+  },
+  {
+    "id": "FF-019",
+    "category": "overdue_risk",
+    "question": "What happens if I don't deal with a fine in time?",
+    "answer": "If a fine is left too long, it can escalate and become more expensive. Fine Flow helps prevent that by tracking deadlines, flagging urgent fines, and keeping them visible before they become a problem. If a due date is missed, the fine is marked overdue so it can be dealt with immediately. Fine Flow does its utmost best at all times to give you plenty of warnings with plenty of time and tried to get you to act as quickly as possible.",
+    "follow_up": "Would you like me to explain how Fine Flow prioritises urgent fines or how overdue risk are shown on the dashboard?"
+  },
+  {
+    "id": "FF-020",
+    "category": "prioritisation",
+    "question": "What should I do right now?",
+    "answer": "Focus on anything urgent first. Always prioritise fines that are close to their deadline or already overdue to avoid increased penalties. After that, clear any unassigned or unconfirmed fines so everything is properly tracked and dealt with.",
+    "follow_up": "Would you like me to explain how the dashboard prioritises fines so the most important work always comes first?"
+  },
+  {
+    "id": "FF-021",
+    "category": "live_data_limits",
+    "question": "How many fines do I currently have?",
+    "answer": "I don't have direct access to your live account data, but your dashboard shows your current fines, including anything pending or overdue. If you'd like, tell me what you're seeing and I can help you prioritise what to deal with first.",
+    "follow_up": "Would you like me to explain how Nova behaves with and without live account data connected?"
+  },
+  {
+    "id": "FF-022",
+    "category": "pricing",
+    "question": "How much does Fine Flow cost?",
+    "answer": "Fine Flow uses a simple pricing model based on your fleet size. Core — £99/month (5–50 vehicles) Essential — £199/month (51–100 vehicles) Advanced — £399/month (101–200 vehicles) Elite — £499/month (200+ vehicles) Each plan includes a monthly fine allowance, with fines charged at £0.75 each within that limit. If you exceed your allowance, additional fines are charged at £2.50 per fine to stop abuse.",
+    "follow_up": "Would you like me to help work out which plan fits your fleet size best?"
+  },
+  {
+    "id": "FF-023",
+    "category": "pricing",
+    "question": "What plan should I be on?",
+    "answer": "That depends mainly on your fleet size and how many fines you typically process each month. Core is designed for 5 to 50 vehicles, Essential for 51 to 100, Advanced for 101 to 200 and Elite for 200 plus. The right choice is the one that gives you enough monthly allowance without pushing too many fines into the higher overage rate.",
+    "follow_up": "How many vehicles do you run, and roughly how many fines do you deal with in a month?"
+  },
+  {
+    "id": "FF-024",
+    "category": "dashboard",
+    "question": "What does the dashboard focus on first?",
+    "answer": "The dashboard focuses on urgency and action, not vanity metrics. Users need to see what must be dealt with today, what is at risk of escalating, what is overdue, what is unassigned and what is still waiting for confirmation or payment. If the dashboard is not helping the user decide what to do next, it is not doing its job.",
+    "follow_up": "Would you like me to explain which KPIs (Key Performance Indicators) are most useful?"
+  },
+  {
+    "id": "FF-027",
+    "category": "logs",
+    "question": "What are driver logs for?",
+    "answer": "Driver logs give Fine Flow the activity context needed to match fines accurately. They show who was using which vehicle, on what date and at what time, which makes the assignment engine much more reliable. In other words, logs turn driver matching from a guess into a structured decision.",
+    "follow_up": "Would you like me to explain how driver logs are imported and viewed inside the system?"
+  },
+  {
+    "id": "FF-028",
+    "category": "payments",
+    "question": "Can you log into council websites and pay fines for me?",
+    "answer": "Fine Flow doesn't log into authority websites or pay fines on your behalf. Payment portals are controlled by external authorities, with security measures (such as anti-bot protection, session controls, and verification checks) that make reliable automation unsafe and inconsistent. Instead, Fine Flow handles everything up to that final step — automatically capturing fines, extracting all key details, assigning responsibility, prioritising urgency, and preparing everything ready for payment. When you're ready to pay, you're taken directly to the correct authority page with everything organised, so you can process multiple fines quickly and without manual admin. In practice, what used to take hours of chasing emails, matching drivers, and organising data is reduced to a fast, controlled payment step.",
+    "follow_up": null
+  }
+]

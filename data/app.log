@@ -30,3 +30,185 @@
 2026-04-21 11:28:57,317 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-ada-002, using ChromaDB
 2026-04-21 11:28:57,328 INFO Loaded 26 golden Q&A pairs.
 2026-04-21 11:28:58,885 INFO ChromaDB index found.
+2026-04-23 23:47:04,306 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-ada-002, using ChromaDB
+2026-04-23 23:47:04,322 INFO Loaded 26 golden Q&A pairs.
+2026-04-23 23:47:16,336 ERROR Failed to load knowledge base
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\util\connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 753, in connect
+    self.sock = sock = self._new_conn()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 205, in _new_conn
+    raise NameResolutionError(self.host, self, e) from e
+urllib3.exceptions.NameResolutionError: <urllib3.connection.HTTPSConnection object at 0x0000026320F836A0>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\adapters.py", line 644, in send
+    resp = conn.urlopen(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\util\retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api.openai.com', port=443): Max retries exceeded with url: /v1/embeddings (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x0000026320F836A0>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)"))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\answer_builder.py", line 56, in _load_knowledge_base
+    _kb_embeddings = _compute_embeddings_batch(_kb_questions)
+  File "D:\fineflow-rag-clean\app\answer_builder.py", line 74, in _compute_embeddings_batch
+    r = requests.post("https://api.openai.com/v1/embeddings", headers=headers, json=payload, timeout=60)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\api.py", line 115, in post
+    return request("post", url, data=data, json=json, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\adapters.py", line 677, in send
+    raise ConnectionError(e, request=request)
+requests.exceptions.ConnectionError: HTTPSConnectionPool(host='api.openai.com', port=443): Max retries exceeded with url: /v1/embeddings (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x0000026320F836A0>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)"))
+2026-04-23 23:47:16,549 INFO  Nova answer_builder loaded — golden KB + RAG fallback, memory enabled.
+2026-04-23 23:47:16,924 INFO ChromaDB index found.
+2026-04-23 23:47:58,821 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-ada-002, using ChromaDB
+2026-04-23 23:47:58,822 INFO Loaded 26 golden Q&A pairs.
+2026-04-23 23:48:16,264 ERROR Failed to load knowledge base
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 790, in connect
+    sock_and_verified = _ssl_wrap_socket_and_match_hostname(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 969, in _ssl_wrap_socket_and_match_hostname
+    ssl_sock = ssl_wrap_socket(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\util\ssl_.py", line 480, in ssl_wrap_socket
+    ssl_sock = _ssl_wrap_socket_impl(sock, context, tls_in_tls, server_hostname)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\util\ssl_.py", line 524, in _ssl_wrap_socket_impl
+    return ssl_context.wrap_socket(sock, server_hostname=server_hostname)
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 513, in wrap_socket
+    return self.sslsocket_class._create(
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1071, in _create
+    self.do_handshake()
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1342, in do_handshake
+    self._sslobj.do_handshake()
+ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the remote host
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\adapters.py", line 644, in send
+    resp = conn.urlopen(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\util\retry.py", line 474, in increment
+    raise reraise(type(error), error, _stacktrace)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\util\util.py", line 38, in reraise
+    raise value.with_traceback(tb)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 790, in connect
+    sock_and_verified = _ssl_wrap_socket_and_match_hostname(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 969, in _ssl_wrap_socket_and_match_hostname
+    ssl_sock = ssl_wrap_socket(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\util\ssl_.py", line 480, in ssl_wrap_socket
+    ssl_sock = _ssl_wrap_socket_impl(sock, context, tls_in_tls, server_hostname)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\util\ssl_.py", line 524, in _ssl_wrap_socket_impl
+    return ssl_context.wrap_socket(sock, server_hostname=server_hostname)
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 513, in wrap_socket
+    return self.sslsocket_class._create(
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1071, in _create
+    self.do_handshake()
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1342, in do_handshake
+    self._sslobj.do_handshake()
+urllib3.exceptions.ProtocolError: ('Connection aborted.', ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\answer_builder.py", line 56, in _load_knowledge_base
+    _kb_embeddings = _compute_embeddings_batch(_kb_questions)
+  File "D:\fineflow-rag-clean\app\answer_builder.py", line 74, in _compute_embeddings_batch
+    r = requests.post("https://api.openai.com/v1/embeddings", headers=headers, json=payload, timeout=60)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\api.py", line 115, in post
+    return request("post", url, data=data, json=json, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\adapters.py", line 659, in send
+    raise ConnectionError(err, request=request)
+requests.exceptions.ConnectionError: ('Connection aborted.', ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None))
+2026-04-23 23:48:16,357 INFO  Nova answer_builder loaded — golden KB + RAG fallback, memory enabled.
+2026-04-23 23:48:16,656 INFO ChromaDB index found.
+2026-04-24 00:00:59,543 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-ada-002, using ChromaDB
+2026-04-24 00:00:59,545 INFO Loaded 26 golden Q&A pairs.
+2026-04-24 00:01:04,403 INFO  Nova answer_builder loaded — golden KB + RAG fallback, memory enabled.
+2026-04-24 00:01:04,770 INFO ChromaDB index found.
+2026-04-24 00:04:28,394 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-04-24 00:04:28,407 INFO Loaded 26 golden Q&A pairs.
+2026-04-24 00:04:31,067 INFO  Nova answer_builder loaded — golden KB + RAG fallback, memory enabled.
+2026-04-24 00:04:31,253 INFO ChromaDB index found.
+2026-04-24 00:08:07,525 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-04-24 00:08:07,527 INFO Loaded 26 golden Q&A pairs.
+2026-04-24 00:08:09,539 INFO  Nova answer_builder loaded — golden KB + RAG fallback, memory enabled.
+2026-04-24 00:08:09,756 INFO ChromaDB index found.
+2026-04-24 00:09:42,518 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-04-24 00:09:42,520 INFO Loaded 26 golden Q&A pairs.
+2026-04-24 00:09:45,798 INFO  Nova answer_builder loaded — golden KB + RAG fallback, memory enabled.
+2026-04-24 00:09:45,967 INFO ChromaDB index found.
+2026-04-24 00:11:59,913 INFO Starting ingest from D:\fineflow-rag-clean\data\raw
+2026-04-24 00:11:59,946 INFO Wrote: Fine Flow MASTER FINAL.txt
+2026-04-24 00:11:59,946 INFO Ingest finished. written=1 skipped=0
+2026-04-24 00:12:17,430 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-04-24 00:12:17,430 INFO Building index with OpenAI embeddings (force_rebuild=True)...
+2026-04-24 00:12:17,450 INFO Cleared existing Chroma collection.
+2026-04-24 00:12:17,492 INFO Generating embeddings for 7 chunks...
+2026-04-24 00:12:19,718 INFO Indexed batch 1/1
+2026-04-24 00:12:19,719 INFO Index built. Total chunks=7
+2026-04-24 00:12:35,045 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-04-24 00:12:35,047 INFO Loaded 26 golden Q&A pairs.
+2026-04-24 00:12:36,444 INFO  Nova answer_builder loaded — golden KB + RAG fallback, memory enabled.
+2026-04-24 00:12:36,643 INFO ChromaDB index found.
+2026-04-24 00:16:33,161 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-04-24 00:16:33,162 INFO Loaded 26 golden Q&A pairs.
+2026-04-24 00:16:36,282 INFO  Nova answer_builder loaded — golden KB + RAG fallback, memory enabled.
+2026-04-24 00:16:36,561 INFO ChromaDB index found.
+2026-04-24 00:35:27,622 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-04-24 00:35:27,624 INFO Loaded 26 KB items
+2026-04-24 00:35:27,830 INFO ChromaDB index found.
+2026-04-24 00:43:38,376 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-04-24 00:43:38,378 INFO Loaded 26 KB pairs
+2026-04-24 00:43:38,558 INFO ChromaDB index found.

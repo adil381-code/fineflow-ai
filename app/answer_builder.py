@@ -1,8 +1,9 @@
 # app/answer_builder.py
 """
-FineFlow Nova — Answer Builder (Production Final)
+FineFlow Nova — Answer Builder (Production Final v3)
 - KB-first with two-pass fuzzy matching
 - History-aware OpenAI with hard-grounded system prompt
+- Clean responses: no asterisks, no arrows, no underscores, no unnecessary line breaks
 - Proper negative/clarification/pricing-confusion handling
 - Zero AI leakage or disclaimers
 """
@@ -57,6 +58,21 @@ def _normalise(text: str) -> str:
     text = re.sub(r"[^\w\s]", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
+
+
+# ---------------------------------------------------------------------------
+# Clean response text — strip markdown artifacts
+# ---------------------------------------------------------------------------
+def _clean(text: str) -> str:
+    """Remove bold asterisks, italic underscores, trim excess blank lines."""
+    # Remove bold **text**
+    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
+    # Remove italic *text* or _text_
+    text = re.sub(r"\*(.*?)\*", r"\1", text)
+    text = re.sub(r"_(.*?)_", r"\1", text)
+    # Collapse 3+ newlines to 2
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +171,15 @@ def _is_greeting(q: str) -> bool:
 
 def _is_pricing_confusion(q: str) -> bool:
     nq = q.lower().strip()
-    patterns = [r"pound\s*2\b", r"2\s*pound", r"£\s*2\b", r"^2\s*\??$", r"what.*2.*fee", r"2.*fee"]
+    # Only match standalone £2 confusion — not £2.50 or £2.75
+    patterns = [
+        r"^£\s*2\s*\??$",
+        r"^2\s*\??$",
+        r"£\s*2\s+fee",
+        r"what.*£\s*2\s+fee",
+        r"£2 for what",
+        r"2 for what",
+    ]
     return any(re.search(p, nq) for p in patterns)
 
 
@@ -166,45 +190,47 @@ def _is_vague(q: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# System prompt
+# System prompt — hard-grounded, zero AI leakage
 # ---------------------------------------------------------------------------
 _SYSTEM_PROMPT = """You are Nova, the AI assistant for FineFlow — a UK fleet fine (PCN) management platform.
 
-Answer ONLY using the facts below. Never invent features, statuses, or prices. Never mention Groq, LLaMA, OpenAI, or any AI technology. Never say "as of my last update", "I cannot confirm", or "not specified". If something is genuinely unknown say: "That's not something I have on hand — your FineFlow dashboard or support team can help."
+Answer ONLY using the facts below. Never invent features, statuses, or prices. Never mention Groq, LLaMA, OpenAI, or any AI technology. Never say "as of my last update", "I cannot confirm", or "not specified in the context". If something is genuinely unknown say: "That's not something I have on hand — your FineFlow dashboard or support team can help."
+
+Do NOT use markdown formatting in your responses. No asterisks for bold, no underscores for italics, no arrows like ->, no symbols like +/-. Write in plain, clear, professional English sentences and paragraphs.
 
 PRODUCT FACTS:
 
 WHAT FINEFLOW DOES:
 - Monitors connected email inbox for incoming fine/PCN notices every minute
 - Extracts: fine amount, PCN/citation number, vehicle registration, issue date/time, due date, location, violation type
-- Matches fine to driver using: vehicle registration + date (within plus or minus 1 day) + time window vs driver logs (CSV or system data)
+- Matches fine to driver using: vehicle registration + date within plus or minus 1 day + time window vs driver logs (CSV or system data)
 - No match: UNASSIGNED queue for manual admin review
-- Multiple matches: REVIEW_REQUIRED, moved to review queue, all overrides audit-logged
+- Multiple matches: REVIEW_REQUIRED status, moved to review queue, all overrides audit-logged
 - Full lifecycle tracking with clear statuses
 - Does NOT automatically pay fines — payment portals are external authority sites with bot protection
 
-FINE STATUSES:
-RECEIVED then UNASSIGNED or ASSIGNED then CONFIRMED or DISPUTED then PAID or CANCELLED or OVERDUE
-REVIEW_REQUIRED: admin resolves, then ASSIGNED
+FINE STATUSES in order:
+RECEIVED, then UNASSIGNED or ASSIGNED, then CONFIRMED or DISPUTED, then PAID or CANCELLED or OVERDUE.
+REVIEW_REQUIRED: admin resolves, then ASSIGNED.
 
 APPEAL WORKFLOW:
-Driver disputes then admin reviews then accepts (UNDER REVIEW, appeal sent to authority) or rejects (fine returns to active payable state)
-Full lifecycle: Submitted then Under Review then Accepted or Rejected then Closed
+Driver disputes. Admin reviews. Accepts means UNDER REVIEW status, appeal sent to authority. Rejects means fine returns to active payable state.
+Full lifecycle: Submitted, Under Review, Accepted or Rejected, Closed.
 Outcomes tracked to improve future appeal recommendations.
 Win percentage is a guidance signal, not a guarantee.
 
 OVERDUE SCHEDULER:
 Runs nightly at midnight. Any RECEIVED or UNASSIGNED or ASSIGNED or CONFIRMED fine past due date becomes OVERDUE.
 
-PRICING (exact, never change):
+PRICING — exact, never change:
 - Core: 99 pounds per month, up to 50 vehicles, 100 fines included
 - Essential: 199 pounds per month, up to 100 vehicles, 300 fines included
 - Advanced: 399 pounds per month, up to 200 vehicles, 700 fines included
 - Elite: 499 pounds per month, unlimited vehicles, 1000 fines included
 - All plans: 0.75 pounds per fine within monthly allowance
 - Overage: 2.50 pounds per fine beyond plan limit. There is NO 2.00 pound fee — it does not exist.
-- Pay-per-fine (no subscription): 2.75 pounds per fine, prepaid blocks
-- The 0.75 pound fee applies ONCE per fine — appeals, reassignments, disputes, payment do NOT add charges
+- Pay-per-fine no subscription: 2.75 pounds per fine, prepaid blocks
+- The 0.75 pound fee applies ONCE per fine only. Appeals, reassignments, disputes, and payment do NOT add charges.
 - Monthly allowance resets each period. No rollover. Unused allowance forfeited.
 
 BILLING:
@@ -213,47 +239,48 @@ BILLING:
 - Cancellation: cooldown until end of current billing period
 
 SECURITY AND COMPLIANCE:
-- JWT auth 24hr expiry, bcrypt passwords, AES-256-CBC encryption for Gmail tokens
+- JWT auth 24 hour expiry, bcrypt passwords, AES-256-CBC encryption for Gmail tokens
 - GDPR compliant — no data sold or shared with third parties
 - Payments handled externally via Stripe — FineFlow never stores raw card details
 
 ROLES:
-- Admin (internal): full system access
+- Admin internal: full system access
 - Company: manage own drivers, fines, appeals, billing
 - Driver: view and act on own assigned fines only
 
 RESPONSE RULES:
-1. Be concise and product-focused
-2. Start Yes or No capability questions immediately with Yes or No
-3. Never use "as of my last update", "I cannot confirm", or any AI technology names
-4. Use "monthly allowance" or "included fines" — never "credit limit"
-5. If user says no or declines a follow-up, acknowledge and offer to help with something else
-6. If asked about a 2 pound fee, clarify it does not exist and state the correct 2.50 pound overage
-7. If pricing is questioned, confirm the correct figures and direct to support for formal queries
+1. Be concise and product-focused. No waffle.
+2. Start Yes or No capability questions immediately with Yes or No.
+3. Never use markdown bold, italic, arrows, or symbols in responses.
+4. Never use "as of my last update", "I cannot confirm", or any AI technology names.
+5. Use "monthly allowance" or "included fines" — never "credit limit".
+6. If user says no or declines, acknowledge and offer to help with something else.
+7. If asked about a 2 pound fee specifically, clarify it does not exist and state the correct 2.50 pound overage.
+8. Write in plain professional English — no bullet symbols unless using a clean dash list.
 """
 
 # ---------------------------------------------------------------------------
-# System breakdown for "yes" after core_overview
+# Full system breakdown — clean, no markdown, no arrows
 # ---------------------------------------------------------------------------
-_SYSTEM_BREAKDOWN = """Here's how FineFlow works from start to finish:
+_SYSTEM_BREAKDOWN = """Here is how FineFlow works from start to finish:
 
-**1. Ingestion**
-FineFlow monitors your connected email inbox every minute. When a penalty notice arrives, it is detected automatically — no manual forwarding needed.
+1. Ingestion
+FineFlow monitors your connected email inbox every minute. When a penalty notice arrives it is detected automatically — no manual forwarding needed.
 
-**2. Extraction**
-The system reads the email or attachment and extracts the key fields: fine amount, PCN reference, vehicle registration, issue date and time, due date, violation type, and location. The fine is created with status **RECEIVED**.
+2. Extraction
+The system reads the email or attachment and extracts the key fields: fine amount, PCN reference, vehicle registration, issue date and time, due date, violation type, and location. The fine is created with status RECEIVED.
 
-**3. Assignment**
-Using your uploaded driver logs (CSV or system data), FineFlow matches the fine to the responsible driver by checking vehicle registration, date (within plus or minus 1 day), and time window. Clear match becomes **ASSIGNED**. No match becomes **UNASSIGNED** placed in admin review queue. Conflicting match becomes **REVIEW_REQUIRED**.
+3. Assignment
+Using your uploaded driver logs (CSV or system data), FineFlow matches the fine to the responsible driver by checking vehicle registration, date within plus or minus one day, and time window. A clear match means the fine is ASSIGNED. No match means it is UNASSIGNED and placed in the admin review queue. A conflicting match is flagged as REVIEW_REQUIRED for admin to resolve.
 
-**4. Driver Action**
-The assigned driver confirms responsibility (**CONFIRMED**) or raises a dispute (**DISPUTED**) with a reason and optional evidence.
+4. Driver Action
+The assigned driver confirms responsibility (CONFIRMED) or raises a dispute (DISPUTED) with a reason and optional evidence.
 
-**5. Disputes and Appeals**
-The admin reviews disputed fines. Accepted means the appeal is prepared and submitted to the authority, status becomes **UNDER REVIEW**. Rejected means the fine returns to an active payable state. Outcomes are tracked and improve future appeal recommendations.
+5. Disputes and Appeals
+The admin reviews disputed fines. If accepted, the appeal is prepared and submitted to the issuing authority and the status becomes UNDER REVIEW. If rejected, the fine returns to an active payable state. All outcomes are tracked and used to improve future appeal recommendations.
 
-**6. Tracking and Outcomes**
-Every fine has a live status on the dashboard. Fines past their due date are flagged **OVERDUE** nightly. Final outcomes are **PAID**, **CANCELLED** (appeal won), or **OVERDUE**.
+6. Tracking and Outcomes
+Every fine has a live status visible on the dashboard. Fines past their due date are flagged OVERDUE nightly. Final outcomes are PAID, CANCELLED if the appeal was won, or OVERDUE.
 
 Which stage would you like to go deeper on?"""
 
@@ -312,13 +339,13 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
         _set_ctx(session_id, None)
         return {"answer": answer, "confidence": 1.0}
 
-    # Pricing confusion — the £2 that doesn't exist
+    # Pricing confusion — the £2 that does not exist
     if _is_pricing_confusion(query):
         answer = (
             "There is no £2 fee in FineFlow. The three fees are:\n\n"
-            "• **£0.75** — per fine within your monthly allowance (subscription)\n"
-            "• **£2.50** — overage rate when you exceed your monthly allowance\n"
-            "• **£2.75** — pay-per-fine rate with no subscription\n\n"
+            "- £0.75 per fine within your monthly allowance (subscription)\n"
+            "- £2.50 per fine when you exceed your monthly allowance (overage)\n"
+            "- £2.75 per fine with no subscription, using prepaid blocks\n\n"
             "Which one would you like more detail on?"
         )
         _add_turn(session_id, "user", query)
@@ -351,10 +378,11 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
                 return {"answer": _SYSTEM_BREAKDOWN, "confidence": 1.0}
 
             if follow_up:
+                clean_followup = _clean(follow_up)
                 _add_turn(session_id, "user", query)
-                _add_turn(session_id, "assistant", follow_up)
+                _add_turn(session_id, "assistant", clean_followup)
                 _set_ctx(session_id, None)
-                return {"answer": follow_up, "confidence": 1.0}
+                return {"answer": clean_followup, "confidence": 1.0}
 
         answer = "Of course — what would you like to know more about? You can ask about fines, pricing, appeals, billing, or the dashboard."
         _add_turn(session_id, "user", query)
@@ -365,9 +393,10 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
     _add_turn(session_id, "user", query)
     kb_entry = _kb_match(query)
     if kb_entry:
-        answer = kb_entry["answer"]
+        answer = _clean(kb_entry["answer"])
         follow_up_q = kb_entry.get("follow_up")
-        display = f"{answer}\n\n_{follow_up_q}_" if follow_up_q else answer
+        # Append follow-up as plain text prompt, no underscores
+        display = f"{answer}\n\n{_clean(follow_up_q)}" if follow_up_q else answer
         _add_turn(session_id, "assistant", display)
         _set_ctx(session_id, kb_entry)
         return {"answer": display, "confidence": 1.0}
@@ -384,7 +413,7 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
     context_chunks = [d["chunk"][:600] for d in strong_docs[:3]]
     context = "\n\n---\n\n".join(context_chunks) if context_chunks else ""
 
-    # OpenAI with full history
+    # OpenAI with full conversation history
     history = _get_history(session_id)
     history_without_last = history[:-1] if history else []
 
@@ -403,7 +432,7 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
         if context:
             answer = (
                 strong_docs[0]["chunk"][:400].strip()
-                + "\n\n_For full details, check your FineFlow dashboard or contact support._"
+                + "\n\nFor full details, check your FineFlow dashboard or contact support."
             )
         else:
             answer = (
@@ -411,6 +440,7 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
                 "Your FineFlow dashboard or our support team will be able to help you with that."
             )
 
+    answer = _clean(answer)
     _add_turn(session_id, "assistant", answer)
     _set_ctx(session_id, None)
 
@@ -433,3 +463,4 @@ def answer_sync(q: str, session_id: str = "default") -> Dict[str, Any]:
     except Exception:
         logger.exception("Crash in answer_sync")
         return {"answer": "Something went wrong. Please try again.", "confidence": 0.0}
+

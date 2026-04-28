@@ -227,3 +227,6 @@ requests.exceptions.ConnectionError: ('Connection aborted.', ConnectionResetErro
 2026-04-27 13:18:08,729 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
 2026-04-27 13:18:08,742 INFO Loaded 26 KB entries
 2026-04-27 13:18:08,879 INFO ChromaDB index found.
+2026-04-27 15:16:01,623 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-04-27 15:16:01,637 INFO Loaded 48 KB entries
+2026-04-27 15:16:01,766 INFO ChromaDB index found.

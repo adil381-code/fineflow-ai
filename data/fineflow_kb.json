@@ -17,8 +17,7 @@
     "id": "FF-003",
     "category": "email_ingestion",
     "question": "How does Fine Flow get my fines in the first place?",
-    "answer": "Fine Flow connects to your fine-handling email flow and detects incoming penalty notices automatically. It identifies fine-related messages, extracts the relevant information and turns them into structured records inside the system, so your team does not have to manually copy data out of emails or attachments. The point is to stop fines living in scattered inboxes and move them into a controlled workflow immediately.
-Alternatively, an admin can manually upload fines into the system and Fine Flow will extract the key details that way without connecting to an inbox. The choice is yours",
+    "answer": "Fine Flow connects to your fine-handling email flow and detects incoming penalty notices automatically. It identifies fine-related messages, extracts the relevant information and turns them into structured records inside the system, so your team does not have to manually copy data out of emails or attachments. The point is to stop fines living in scattered inboxes and move them into a controlled workflow immediately.\nAlternatively, an admin can manually upload fines into the system and Fine Flow will extract the key details that way without connecting to an inbox. The choice is yours",
     "follow_up": "Would you like me to explain how the inbox connection works, or how Fine Flow avoids processing unrelated emails?"
   },
   {
@@ -74,8 +73,7 @@ Alternatively, an admin can manually upload fines into the system and Fine Flow 
     "id": "FF-011",
     "category": "payments",
     "question": "If payment is still manual, how does Fine Flow actually save time?",
-    "answer": "Because the payment itself is only the final click. The real time is normally wasted chasing emails, reading attachments, pulling out PCN details, matching the driver, checking deadlines, deciding what needs urgent attention and keeping records straight. Fine Flow removes almost all of that. By the time someone is ready to pay, the fine has already been captured, organised, prioritised and prepared, so the remaining step is quick and controlled.
-Paying the fine on your behalf is not possible with UK authority portals.",
+    "answer": "Because the payment itself is only the final click. The real time is normally wasted chasing emails, reading attachments, pulling out PCN details, matching the driver, checking deadlines, deciding what needs urgent attention and keeping records straight. Fine Flow removes almost all of that. By the time someone is ready to pay, the fine has already been captured, organised, prioritised and prepared, so the remaining step is quick and controlled.\nPaying the fine on your behalf is not possible with UK authority portals.",
     "follow_up": "Would you like me to explain how fines can be grouped by authority to make high-volume payment sessions much faster?"
   },
   {
@@ -168,12 +166,12 @@ Paying the fine on your behalf is not possible with UK authority portals.",
     "question": "What does the dashboard focus on first?",
     "answer": "The dashboard focuses on urgency and action, not vanity metrics. Users need to see what must be dealt with today, what is at risk of escalating, what is overdue, what is unassigned and what is still waiting for confirmation or payment. If the dashboard is not helping the user decide what to do next, it is not doing its job.",
     "follow_up": "Would you like me to explain which KPIs (Key Performance Indicators) are most useful?"
-
+  },
+  {
     "id": "FF-027",
     "category": "logs",
     "question": "What are driver logs for?",
     "answer": "Driver logs give Fine Flow the activity context needed to match fines accurately. They show who was using which vehicle, on what date and at what time, which makes the assignment engine much more reliable. In other words, logs turn driver matching from a guess into a structured decision.",
     "follow_up": "Would you like me to explain how driver logs are imported and viewed inside the system?"
-  },
-  {
- 
+  }
+]

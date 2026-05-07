@@ -233,3 +233,63 @@ requests.exceptions.ConnectionError: ('Connection aborted.', ConnectionResetErro
 2026-04-28 13:59:39,213 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
 2026-04-28 13:59:39,226 INFO Loaded 48 KB entries
 2026-04-28 13:59:39,445 INFO ChromaDB index found.
+2026-05-05 15:58:31,723 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-05-05 15:58:31,737 ERROR Failed to load KB
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\answer_builder.py", line 45, in _load_kb
+    _kb = json.load(f)
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\json\__init__.py", line 293, in load
+    return loads(fp.read(),
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\json\decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\json\decoder.py", line 353, in raw_decode
+    obj, end = self.scan_once(s, idx)
+json.decoder.JSONDecodeError: Invalid control character at: line 20 column 436 (char 2095)
+2026-05-05 15:58:32,065 INFO ChromaDB index found.
+2026-05-05 16:18:13,378 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-05-05 16:18:13,379 ERROR Failed to load KB
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\answer_builder.py", line 45, in _load_kb
+    _kb = json.load(f)
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\json\__init__.py", line 293, in load
+    return loads(fp.read(),
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\json\decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\json\decoder.py", line 353, in raw_decode
+    obj, end = self.scan_once(s, idx)
+json.decoder.JSONDecodeError: Invalid control character at: line 20 column 436 (char 2095)
+2026-05-05 16:18:13,569 INFO ChromaDB index found.
+2026-05-07 14:53:50,480 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-05-07 14:53:50,493 ERROR KB load failed
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\answer_builder.py", line 37, in _load_kb
+    _kb = json.load(f)
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\json\__init__.py", line 293, in load
+    return loads(fp.read(),
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\json\decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\json\decoder.py", line 355, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 15 column 5 (char 1529)
+2026-05-07 14:53:50,724 INFO ChromaDB index found.
+2026-05-07 15:01:58,689 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-05-07 15:01:58,704 ERROR KB load failed
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\answer_builder.py", line 37, in _load_kb
+    _kb = json.load(f)
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\json\__init__.py", line 293, in load
+    return loads(fp.read(),
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\json\decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\json\decoder.py", line 353, in raw_decode
+    obj, end = self.scan_once(s, idx)
+json.decoder.JSONDecodeError: Invalid control character at: line 20 column 436 (char 2095)
+2026-05-07 15:01:58,823 INFO ChromaDB index found.

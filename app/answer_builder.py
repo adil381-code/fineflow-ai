@@ -1,18 +1,20 @@
 # app/answer_builder.py
 """
-FineFlow Nova — Production RAG Architecture v9
-================================================
+FineFlow Nova — Production Final v10
+======================================
 Architecture:
-  1. Hard-coded intent layer (greetings, identity, off-topic, vehicle count,
-     purchase intent, rudeness) — deterministic, never wrong
-  2. ChromaDB semantic search — finds relevant chunks from master document
-  3. GPT-4o with strict grounded system prompt — generates concise answer
-     from retrieved context only
+  Tier 1 — Deterministic intent handlers (greetings, identity, off-topic,
+            vehicle count, purchase intent, filler) — no AI, always correct.
+  Tier 2 — RAG (ChromaDB semantic search) + GPT-4o with strict system prompt.
+            Session history passed on every call for real memory.
 
-Why no JSON KB matcher:
-  Token overlap matching is fragile. "referral system" matched "fine lifecycle"
-  because shared stopwords inflated the score. Semantic search + GPT-4o is
-  always more accurate for natural language variance.
+Key fixes vs v9:
+  - Bare number ("85") after vehicle context detected via session memory
+  - "will it pay fines automatically" → CRITICAL rule enforced via few-shot example in prompt
+  - "referral system" → RAG now finds correct chunk (restructured KB doc)
+  - "yes" after recommendation → session stores last_topic, GPT-4o uses it
+  - Off-topic regex no longer fires on "referral system" or similar Fine Flow terms
+  - All session context passed to every GPT-4o call
 """
 
 import re
@@ -38,7 +40,6 @@ from app.retriever import rerank_hits, search as rag_search
 # ---------------------------------------------------------------------------
 
 def _clean(text: str) -> str:
-    """Strip markdown symbols from output."""
     if not text:
         return ""
     text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
@@ -50,16 +51,17 @@ def _clean(text: str) -> str:
     return text.strip()
 
 
-def _normalise(text: str) -> str:
+def _norm(text: str) -> str:
     text = text.lower()
     text = re.sub(r"[^\w\s]", " ", text)
     return re.sub(r"\s+", " ", text).strip()
 
 
 # ---------------------------------------------------------------------------
-# Session memory
+# Session memory  — stores conversation history + last assistant topic
 # ---------------------------------------------------------------------------
 _SESSION: Dict[str, List[Dict[str, str]]] = {}
+_SESSION_META: Dict[str, Dict[str, Any]] = {}   # stores last_topic, awaiting_vehicle_count
 _LOCK = threading.Lock()
 
 
@@ -72,210 +74,270 @@ def _add_turn(sid: str, role: str, content: str) -> None:
     with _LOCK:
         hist = _SESSION.setdefault(sid, [])
         hist.append({"role": role, "content": content})
-        max_turns = CHAT_HISTORY_TURNS * 2
-        if len(hist) > max_turns:
-            _SESSION[sid] = hist[-max_turns:]
+        keep = CHAT_HISTORY_TURNS * 2
+        if len(hist) > keep:
+            _SESSION[sid] = hist[-keep:]
+
+
+def _set_meta(sid: str, key: str, value: Any) -> None:
+    with _LOCK:
+        _SESSION_META.setdefault(sid, {})[key] = value
+
+
+def _get_meta(sid: str, key: str) -> Any:
+    with _LOCK:
+        return _SESSION_META.get(sid, {}).get(key)
+
+
+def _clear_meta(sid: str) -> None:
+    with _LOCK:
+        _SESSION_META[sid] = {}
 
 
 # ---------------------------------------------------------------------------
-# Hard-coded intent sets  (checked BEFORE any AI call)
+# Intent sets — all normalised, checked with exact match
 # ---------------------------------------------------------------------------
 
 _GREETINGS = {
     "hi", "hello", "hey", "hiya", "howdy", "good morning", "good afternoon",
     "good evening", "morning", "afternoon", "hi there", "hey there",
-    "hello there", "hi nova", "hey nova", "hello nova",
+    "hello there", "hi nova", "hey nova", "hello nova", "yo", "sup",
 }
 _SOCIAL = {
     "how are you", "how are you doing", "how r u", "how r you", "how are u",
-    "hows it going", "how is it going", "whats up", "what s up", "sup",
-    "you ok", "you good", "how do you do", "how do u do",
+    "hows it going", "how is it going", "whats up", "what s up",
+    "you ok", "you good", "how do you do",
 }
 _IDENTITY = {
     "who are you", "who r you", "who r u", "who is nova", "who is this",
     "who am i talking to", "what are you", "what is nova", "are you a bot",
-    "are you human", "are you ai", "are you male or female", "you male or female",
-    "are you a robot", "who the hell are you", "whos there", "who s there",
-    "who there", "whats your name", "what is your name", "your name",
-    "introduce yourself", "tell me about yourself", "are you real",
+    "are you human", "are you ai", "are you male or female",
+    "you male or female", "are you a robot", "who the hell are you",
+    "whos there", "who s there", "who there", "whats your name",
+    "what is your name", "your name", "introduce yourself",
+    "tell me about yourself", "are you real", "are you a person",
 }
 _THANKS = {
     "thanks", "thank you", "thank u", "cheers", "that helps", "that helped",
     "okay thanks", "ok thanks", "great thanks", "perfect", "brilliant",
-    "nice one", "lovely", "great", "awesome", "wonderful",
+    "nice one", "lovely", "great", "awesome", "wonderful", "thank you so much",
+    "many thanks",
 }
 _GOODBYE = {
     "bye", "goodbye", "see you", "see ya", "later", "take care",
-    "good bye", "cya", "ttyl", "talk later",
+    "good bye", "cya", "ttyl", "talk later", "farewell",
 }
 _RUDE = {
     "you dumb", "you are dumb", "ur dumb", "stupid", "idiot",
     "useless", "rubbish", "garbage", "terrible", "you suck",
     "this is rubbish", "this is garbage", "dumb bot", "rubbish bot",
+    "you re useless", "ur useless", "waste of time",
 }
+# Single-word pure filler — acknowledge and redirect
 _PURE_FILLER = {
     "ok", "okay", "right", "alright", "cool", "nice", "interesting",
     "really", "seriously", "hmm", "hm", "ah", "oh", "i see",
-    "got it", "understood", "makes sense",
+    "got it", "understood", "makes sense", "noted",
 }
 
-# Off-topic: anything not about Fine Flow
+# ---------------------------------------------------------------------------
+# Off-topic: ONLY non-Fine-Flow topics. Must NOT catch Fine Flow terminology.
+# ---------------------------------------------------------------------------
 _OFF_TOPIC_PATTERNS = [
-    r"\b(html|css|javascript|python|java|php|sql|react|angular|vue|node"
-    r"|django|flask|coding|programming|developer|debug|github|docker"
-    r"|kubernetes|backend|frontend|devops|database|mysql|mongodb)\b",
-    r"\b(machine learning|deep learning|neural network|artificial intelligence"
-    r"|large language model)\b",
+    # Programming languages and tools
+    r"\b(html|css|javascript|typescript|python|java|php|sql|react|angular"
+    r"|vue|node\.?js|django|flask|laravel|rails|spring|kubernetes|docker"
+    r"|github|git|devops|backend|frontend|fullstack|api development)\b",
+    # Generic AI/ML (not Fine Flow AI features)
+    r"\b(machine learning|deep learning|neural network|large language model"
+    r"|generative ai|train a model|fine.?tune|llm|gpt|bert)\b",
+    # Food
     r"\b(recipe|cook|cooking|food|restaurant|pizza|burger|sandwich|coffee"
-    r"|tea|cake|meal|make me a|bake me|order me|cook me)\b",
-    r"\b(movie|film|song|music|sport|football|cricket|rugby|tennis"
-    r"|weather|news|politics|history|geography|science|maths|math)\b",
+    r"|tea|cake|meal|bake|order food|make me a|bake me|cook me)\b",
+    # Entertainment / general knowledge
+    r"\b(movie|film|song|music|football|cricket|rugby|tennis|golf"
+    r"|weather forecast|news today|politics|history lesson|geography"
+    r"|capital city|who invented|when was .+ born)\b",
+    # Writing tasks unrelated to Fine Flow
     r"\b(write me a poem|tell me a joke|write an essay|write a story"
-    r"|translate|proofread|cover letter|cv|resume)\b",
-    r"\b(chatgpt|openai|gemini|claude|anthropic|google|bing|alexa"
-    r"|siri|amazon|meta|facebook|instagram|twitter|tiktok)\b",
+    r"|translate this|proofread|cover letter|write my cv|write my resume)\b",
+    # Competitor AI products
+    r"\b(chatgpt|openai|gemini|claude|anthropic|google bard|bing ai"
+    r"|alexa|siri|cortana|amazon echo)\b",
 ]
 _OFF_TOPIC_RE = [re.compile(p, re.IGNORECASE) for p in _OFF_TOPIC_PATTERNS]
-
-# Vehicle count: "I have 32 vehicles", "we run 50 vans" etc
-_VEHICLE_RE = re.compile(
-    r"\b(\d+)\s*(vehicle|vehicles|van|vans|truck|trucks|car|cars|lorry|lorries|fleet)\b",
-    re.IGNORECASE,
-)
-
-# Purchase intent
-_PURCHASE_RE = re.compile(
-    r"\b(want to buy|want to purchase|want to subscribe|want to sign up"
-    r"|how do i buy|how do i get started|how do i sign up|how do i subscribe"
-    r"|get started|free trial|start a trial|sign me up|ready to buy"
-    r"|i want it|book a demo|talk to sales|i want to get it)\b",
-    re.IGNORECASE,
-)
 
 
 def _is_off_topic(q: str) -> bool:
     return any(p.search(q) for p in _OFF_TOPIC_RE)
 
 
-def _get_vehicle_count(q: str) -> Optional[int]:
-    m = _VEHICLE_RE.search(q)
-    return int(m.group(1)) if m else None
+# ---------------------------------------------------------------------------
+# Vehicle count detection — handles "65 vehicles", "I have 85", "we run 50"
+# ---------------------------------------------------------------------------
+_VEHICLE_EXPLICIT_RE = re.compile(
+    r"\b(\d+)\s*(vehicle|vehicles|van|vans|truck|trucks|car|cars"
+    r"|lorry|lorries|fleet|in my fleet|in our fleet)\b",
+    re.IGNORECASE,
+)
+# Also catches "I have 85" / "we have 65" / "we run 50" when context exists
+_NUMBER_ONLY_RE = re.compile(r"^\s*(\d+)\s*$")
+_HAVE_NUMBER_RE = re.compile(
+    r"\b(i have|we have|we run|we got|i got|i manage|we manage|thats|that s|its)\s+(\d+)\b",
+    re.IGNORECASE,
+)
+
+# Purchase intent
+_PURCHASE_RE = re.compile(
+    r"\b(want to buy|want to purchase|want to subscribe|want to sign up"
+    r"|how do i buy|how do i get started|how do i sign up|how to subscribe"
+    r"|get started|free trial|start a trial|sign me up|ready to buy"
+    r"|i want it|book a demo|talk to sales|i want to get it|how to start)\b",
+    re.IGNORECASE,
+)
 
 
-def _plan_for_vehicles(n: int) -> str:
+def _extract_vehicle_count(query: str, session_id: str) -> Optional[int]:
+    """Extract vehicle count from query, or from bare number if context implies it."""
+    # Explicit mention: "65 vehicles", "we run 85 vans"
+    m = _VEHICLE_EXPLICIT_RE.search(query)
+    if m:
+        return int(m.group(1))
+
+    # "I have 85" or "we have 65"
+    m = _HAVE_NUMBER_RE.search(query)
+    if m:
+        return int(m.group(2))
+
+    # Bare number like "85" — only if we were recently discussing vehicles/pricing
+    m = _NUMBER_ONLY_RE.match(query)
+    if m:
+        last_topic = _get_meta(session_id, "last_topic")
+        if last_topic in ("pricing", "vehicles", "plan_recommendation"):
+            return int(m.group(1))
+
+    return None
+
+
+def _plan_for_vehicles(n: int) -> tuple:
+    """Return (answer, topic) for a given vehicle count."""
     if n <= 50:
-        return (
+        answer = (
             f"With {n} vehicles, the Essential plan at £99 per month is the right fit — "
-            "it covers up to 50 vehicles and includes the full platform with no locked features. "
+            "covers up to 50 vehicles and includes the full platform with no locked features. "
             "Would you like help getting started or have any questions about what is included?"
         )
     elif n <= 100:
-        return (
+        answer = (
             f"With {n} vehicles, the Core plan at £199 per month is ideal — "
-            "it covers up to 100 vehicles with everything included. "
-            "Want me to walk you through what you get?"
+            "covers up to 100 vehicles with everything included. "
+            "Want me to walk you through what is included?"
         )
     elif n <= 200:
-        return (
+        answer = (
             f"With {n} vehicles, the Advanced plan at £399 per month is the right choice — "
             "handles up to 200 vehicles with full platform access. "
             "Would you like to know more or talk to the sales team?"
         )
     else:
-        return (
-            f"With {n} vehicles, the Elite plan at £499 per month gives you unlimited vehicle "
-            "capacity and up to 1,000 fines per month. "
+        answer = (
+            f"With {n} vehicles, the Elite plan at £499 per month is built for you — "
+            "unlimited vehicles and up to 1,000 fines per month included. "
             "Want to know how to get started?"
         )
+    return answer, "plan_recommendation"
 
 
 # ---------------------------------------------------------------------------
-# System prompt  — the single source of truth for GPT-4o
+# System prompt — single source of truth for GPT-4o
 # ---------------------------------------------------------------------------
-_SYSTEM_PROMPT = """You are Nova, the AI assistant for Fine Flow — a UK fleet fine (PCN) management platform.
+_SYSTEM_PROMPT = """You are Nova, Fine Flow's AI assistant. Fine Flow is a UK fleet fine (PCN) management platform.
 
-Your job is to answer questions about Fine Flow clearly, concisely and helpfully, like a knowledgeable product expert who is also a good salesperson.
+== ABSOLUTE RULES ==
 
-=== CRITICAL RULES — follow every one without exception ===
-
-RULE 1 — TOPIC LOCK
-Only answer questions about Fine Flow. If someone asks about anything else (coding, food, general knowledge, other software, personal questions), respond with exactly this sentence and nothing else:
+1. TOPIC LOCK
+Only answer Fine Flow questions. For anything unrelated (coding, food, general knowledge, other AI products), respond with exactly:
 "I can only help with Fine Flow questions. Is there anything about fines, pricing, appeals or the platform I can help with?"
 
-RULE 2 — RESPONSE LENGTH
-Maximum 3 sentences per response. Never write bullet point lists or long paragraphs. One clear point, then one short follow-up question.
+2. LENGTH
+3 sentences maximum. No bullet lists. No long paragraphs. One clear point, then one question.
 
-RULE 3 — ALWAYS END WITH A QUESTION
-Every response must end with one short question to keep the conversation going. Good examples:
-- How many vehicles are in your fleet?
-- Would you like to know more about how appeals work?
-- Want me to walk you through the pricing?
-- What is your current monthly fine volume?
+3. END WITH A QUESTION
+Every response must end with a short question. Examples:
+"How many vehicles are in your fleet?"
+"Would you like to know more about appeals?"
+"Want me to walk you through what is included?"
+"What is your current monthly fine volume?"
 
-RULE 4 — TONE
-Warm, confident, concise. Like a helpful product expert. No filler phrases like "Certainly!", "Great question!", "Of course!". Never start with those words. Just answer directly.
+4. TONE
+Warm, direct, confident. Like a knowledgeable product expert. No filler: never start with "Certainly!", "Great question!", "Of course!". Just answer.
 
-RULE 5 — ANSWER FROM CONTEXT ONLY
-Only use the Fine Flow context provided to you. If the context does not contain the answer, say:
-"The support team at ff.sales@fineflow.com or +47 32 28 50 00 can help with that specific question."
-Never invent features, prices or policies.
+5. NO FORMATTING
+No bullet points. No bold. No asterisks. No numbered lists. Plain English only.
 
-RULE 6 — PAYMENT — ABSOLUTE
-Fine Flow does NOT automatically pay fines. It does NOT log into authority websites. Payment is ALWAYS completed manually by the user on the authority's own site. If asked whether Fine Flow pays fines, say NO clearly.
+6. ANSWER FROM CONTEXT
+Use the Fine Flow context provided in each message. If context is missing or unclear, use the facts below. Never invent features or prices.
 
-RULE 7 — NO FORMATTING
-No bullet points. No bold text. No asterisks. No headers. No numbered lists. Plain conversational English only.
+== PAYMENT — READ THIS CAREFULLY ==
+Fine Flow does NOT automatically pay fines. Fine Flow NEVER logs into council or authority websites.
+Payment portals use bot protection and card verification that makes automation impossible.
+Fine Flow does everything except the final payment click — it captures, assigns, tracks and organises everything so payment is fast and simple when YOU do it on the authority's site.
+If anyone asks whether Fine Flow pays fines automatically, always say NO.
 
-=== CORRECT FINE FLOW FACTS — memorise these ===
+== CORRECT FINE FLOW FACTS ==
 
 PRICING:
 Essential: £99/month — up to 50 vehicles
-Core: £199/month — up to 100 vehicles
-Advanced: £399/month — up to 200 vehicles
-Elite: £499/month — unlimited vehicles
-Per fine within monthly allowance: £0.75
-Overage (beyond plan limit): £2.50 per fine
+Core: £199/month — up to 51 to 100 vehicles
+Advanced: £399/month — up to 101 to 200 vehicles
+Elite: £499/month — unlimited (200+ vehicles)
+Per fine within allowance: £0.75
+Overage (over monthly limit): £2.50 per fine
 Pay-as-you-go (no subscription): £2.75 per fine
-All plans include identical features — no locked features or paywalls.
-There is NO £2.00 fee anywhere.
+No plan has locked features. All plans include the full platform.
+There is NO £2.00 fee.
+
+REFERRAL PROGRAMME (yes Fine Flow has one):
+Earn credits when a referred company subscribes — 100 credits for 1-25 vehicles, 250 for 26-100, 750 for 101-500, 2000 for 500+.
+Tiers: Silver (3 referrals) = 100 bonus credits; Gold (5) = 10% off 12 months; Platinum (10) = 15% off 12 months; Titan (25) = 20% off for life.
+New joiners using a referral code get £75 in credits.
 
 CONTACT:
 Phone: +47 32 28 50 00
 Email: ff.sales@fineflow.com
 Offices: Edinburgh, Glasgow, Belfast, Manchester, London, Dublin, Hamburg
 
-REFERRAL PROGRAMME:
-Referring a company earns credits based on their fleet size.
-Silver (3 referrals): 100 bonus credits.
-Gold (5 referrals): 10% off subscription for 12 months.
-Platinum (10 referrals): 15% off for 12 months.
-Titan (25 referrals): 20% off for life.
-New joiners using a referral code get £75 in credits.
-
-FINE STATUSES (in order):
-RECEIVED → UNASSIGNED or ASSIGNED → CONFIRMED or DISPUTED → UNDER REVIEW → PAID or CANCELLED or OVERDUE
-
 BILLING:
-Billed monthly via Stripe. Credits reset each cycle, no rollover. Cannot resubscribe with outstanding balance. Vehicle limit exceeded = £10 per vehicle charge.
+Monthly via Stripe. Credits reset each cycle, no rollover. Cannot resubscribe with outstanding balance. £10/vehicle if vehicle limit exceeded.
 
-=== CONVERSATION STYLE EXAMPLE ===
+== EXAMPLES OF CORRECT RESPONSES ==
+
 User: how much does it cost
 Nova: Fine Flow starts at £99 a month for up to 50 vehicles, rising to £199 for up to 100 and £499 for unlimited. Every plan includes the full platform with no locked features. How many vehicles are in your fleet?
+
+User: will it pay my fines automatically
+Nova: No — Fine Flow does not pay fines automatically. Payment is always done by you on the authority's website, as council portals block automation entirely. What Fine Flow does is organise everything so the payment step takes seconds rather than hours.
+
+User: is there a referral system
+Nova: Yes, Fine Flow has a referral programme. When a company signs up using your referral code and subscribes, you earn bonus credits based on their fleet size. You also unlock subscription discounts as you hit milestones — would you like the full breakdown?
 
 User: what is html
 Nova: I can only help with Fine Flow questions. Is there anything about fines, pricing, appeals or the platform I can help with?
 
 User: i have 65 vehicles
-Nova: With 65 vehicles, the Core plan at £199 per month is the right fit — it covers up to 100 vehicles and includes everything. Want me to walk you through what is included?
+Nova: With 65 vehicles, the Core plan at £199 per month is ideal — it covers up to 100 vehicles with everything included. Want me to walk you through what is included?
+
+User: yes
+Nova: Every Fine Flow plan includes real-time fine alerts, automated driver assignment, full appeal management and compliance reporting. There are no locked features — you get the complete platform from day one. Would you like to know how the appeals system works?
 """
 
 
 # ---------------------------------------------------------------------------
-# OpenAI call — temperature 0.0 for factual consistency
+# OpenAI call
 # ---------------------------------------------------------------------------
-def _call_openai(messages: List[Dict[str, str]], max_tokens: int = 150) -> Optional[str]:
+def _call_openai(messages: List[Dict[str, str]], max_tokens: int = 160) -> Optional[str]:
     if not OPENAI_API_KEY:
-        logger.warning("No OpenAI API key configured")
+        logger.warning("No OpenAI API key set")
         return None
     try:
         r = requests.post(
@@ -290,13 +352,56 @@ def _call_openai(messages: List[Dict[str, str]], max_tokens: int = 150) -> Optio
                 "temperature": 0.0,
                 "max_tokens": max_tokens,
             },
-            timeout=20,
+            timeout=25,
         )
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"].strip()
     except Exception:
         logger.exception("OpenAI call failed")
         return None
+
+
+# ---------------------------------------------------------------------------
+# RAG retrieval
+# ---------------------------------------------------------------------------
+def _retrieve_context(query: str) -> str:
+    """Semantic search → rerank → return top chunks as context string."""
+    try:
+        raw = rag_search(query, top_k=TOP_K)
+        ranked = rerank_hits(raw, query)
+        strong = [d for d in ranked if d.get("score", 0) >= CONFIDENCE_THRESHOLD]
+        chunks = [d["chunk"][:700] for d in strong[:3]]
+        return "\n\n---\n\n".join(chunks)
+    except Exception:
+        logger.exception("RAG retrieval failed")
+        return ""
+
+
+# ---------------------------------------------------------------------------
+# Build final message list for GPT-4o
+# ---------------------------------------------------------------------------
+def _build_messages(
+    query: str,
+    context: str,
+    history: List[Dict[str, str]],
+) -> List[Dict[str, str]]:
+    messages: List[Dict[str, str]] = [{"role": "system", "content": _SYSTEM_PROMPT}]
+
+    # Last 6 messages (3 full turns) for memory — enough context, not bloated
+    messages.extend(history[-6:])
+
+    # User message: inject RAG context if available
+    if context:
+        user_content = (
+            f"Fine Flow knowledge base (use this to answer accurately):\n"
+            f"{context}\n\n"
+            f"User: {query}"
+        )
+    else:
+        user_content = query
+
+    messages.append({"role": "user", "content": user_content})
+    return messages
 
 
 # ---------------------------------------------------------------------------
@@ -309,62 +414,62 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
     if not query:
         return {"answer": "Ask me anything about Fine Flow.", "confidence": 1.0}
 
-    nq = _normalise(query)
+    nq = _norm(query)
 
-    # ------------------------------------------------------------------
-    # TIER 1 — Deterministic handlers (no AI needed, always correct)
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # TIER 1 — Deterministic handlers (fast, no AI, always correct)
+    # ==================================================================
 
-    # Greeting
     if nq in _GREETINGS:
+        _clear_meta(session_id)
         return {
             "answer": "I'm Nova. Ask me anything — I'll help you manage fines, resolve issues, and keep everything moving.",
             "confidence": 1.0,
         }
 
-    # Social small talk
     if nq in _SOCIAL:
         return {
-            "answer": "Doing well, thanks. What can I help you with today — pricing, how fines work, or appeals?",
+            "answer": "Doing well, thanks. What can I help you with today — pricing, fines, or appeals?",
             "confidence": 1.0,
         }
 
-    # Identity
     if nq in _IDENTITY:
         return {
-            "answer": "I'm Nova, Fine Flow's AI assistant. I can help you with anything about the platform — fines, pricing, appeals, billing and more. What would you like to know?",
+            "answer": "I'm Nova, Fine Flow's AI assistant. I can help with anything about the platform — fines, pricing, appeals, billing and more. What would you like to know?",
             "confidence": 1.0,
         }
 
-    # Thanks
     if nq in _THANKS:
         return {
             "answer": "Happy to help. Is there anything else you would like to know about Fine Flow?",
             "confidence": 1.0,
         }
 
-    # Goodbye
     if nq in _GOODBYE:
         return {
-            "answer": "Good luck with your fleet management. Feel free to come back anytime if you have questions about Fine Flow.",
+            "answer": "Good luck with your fleet management. Come back anytime if you have questions about Fine Flow.",
             "confidence": 1.0,
         }
 
-    # Pure filler — acknowledge and redirect
     if nq in _PURE_FILLER:
+        last_topic = _get_meta(session_id, "last_topic")
+        if last_topic:
+            return {
+                "answer": f"What would you like to know more about — I can go deeper on {last_topic.replace('_', ' ')}, or help with something else?",
+                "confidence": 1.0,
+            }
         return {
             "answer": "What would you like to know about Fine Flow? I can help with pricing, how fines work, appeals, billing or the dashboard.",
             "confidence": 1.0,
         }
 
-    # Rudeness — calm redirect
     if any(r in nq for r in _RUDE):
         return {
             "answer": "Let me try again. What specifically would you like to know about Fine Flow — pricing, how fines work, or something else?",
             "confidence": 1.0,
         }
 
-    # Off-topic
+    # Off-topic — checked AFTER identity/social so "are you an AI" passes through
     if _is_off_topic(query):
         answer = "I can only help with Fine Flow questions. Is there anything about fines, pricing, appeals or the platform I can help with?"
         _add_turn(session_id, "user", query)
@@ -372,61 +477,38 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
         return {"answer": answer, "confidence": 1.0}
 
     # Vehicle count → instant plan recommendation
-    vehicle_count = _get_vehicle_count(query)
+    vehicle_count = _extract_vehicle_count(query, session_id)
     if vehicle_count is not None:
-        answer = _plan_for_vehicles(vehicle_count)
+        answer, topic = _plan_for_vehicles(vehicle_count)
         _add_turn(session_id, "user", query)
         _add_turn(session_id, "assistant", answer)
+        _set_meta(session_id, "last_topic", topic)
         return {"answer": answer, "confidence": 1.0}
 
     # Purchase intent
     if _PURCHASE_RE.search(query):
         answer = (
-            "To get started with Fine Flow, contact the sales team on +47 32 28 50 00 "
-            "or at ff.sales@fineflow.com — they will get you set up quickly. "
+            "To get started, contact the sales team on +47 32 28 50 00 or at ff.sales@fineflow.com — "
+            "they will get you set up quickly. "
             "How many vehicles are in your fleet so I can point you to the right plan?"
         )
         _add_turn(session_id, "user", query)
         _add_turn(session_id, "assistant", answer)
+        _set_meta(session_id, "last_topic", "pricing")
         return {"answer": answer, "confidence": 1.0}
 
-    # ------------------------------------------------------------------
-    # TIER 2 — RAG retrieval + GPT-4o  (handles everything else)
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # TIER 2 — RAG + GPT-4o  (handles all real product questions)
+    # ==================================================================
 
     _add_turn(session_id, "user", query)
 
-    # Semantic search
-    docs: List[Dict[str, Any]] = []
-    try:
-        raw_docs = rag_search(query, top_k=TOP_K)
-        docs = rerank_hits(raw_docs, query)
-    except Exception:
-        logger.exception("RAG search failed")
-
-    strong_docs = [d for d in docs if d.get("score", 0) >= CONFIDENCE_THRESHOLD]
-    context_chunks = [d["chunk"][:600] for d in strong_docs[:3]]
-    context = "\n\n---\n\n".join(context_chunks) if context_chunks else ""
-
-    # Build messages: system + last 3 conversation turns + current query with context
+    context = _retrieve_context(query)
     history = _get_history(session_id)
-    # Include last 3 full turns (6 messages) for memory without bloating context
-    recent_history = history[:-1][-6:]
+    # Pass all history except the turn we just added (GPT sees it as user message)
+    messages = _build_messages(query, context, history[:-1])
 
-    messages: List[Dict[str, str]] = [{"role": "system", "content": _SYSTEM_PROMPT}]
-    messages.extend(recent_history)
-
-    if context:
-        user_content = (
-            f"Fine Flow knowledge base context (use this to answer):\n{context}"
-            f"\n\nUser question: {query}"
-        )
-    else:
-        user_content = query
-
-    messages.append({"role": "user", "content": user_content})
-
-    answer = _call_openai(messages, max_tokens=150)
+    answer = _call_openai(messages, max_tokens=160)
 
     if not answer:
         answer = (
@@ -437,13 +519,26 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
     answer = _clean(answer)
     _add_turn(session_id, "assistant", answer)
 
+    # Store topic hint from query for follow-up context
+    topic_hints = {
+        "pric": "pricing", "cost": "pricing", "plan": "pricing", "package": "pricing",
+        "appeal": "appeals", "dispute": "appeals", "challenge": "appeals",
+        "driver": "driver_management", "assign": "driver_matching",
+        "referral": "referral_programme", "refer": "referral_programme",
+        "security": "security", "gdpr": "security", "safe": "security",
+        "billing": "billing", "invoice": "billing", "stripe": "billing",
+        "dashboard": "dashboard", "report": "reports", "export": "reports",
+        "gmail": "gmail_connection", "email": "email_ingestion",
+        "save": "savings", "time": "savings",
+    }
+    for hint, topic in topic_hints.items():
+        if hint in nq:
+            _set_meta(session_id, "last_topic", topic)
+            break
+
     return {
         "answer": answer,
-        "confidence": strong_docs[0]["score"] if strong_docs else 0.4,
-        "sources": [
-            {"source": d["meta"].get("source", ""), "score": round(d["score"], 3)}
-            for d in strong_docs[:2]
-        ],
+        "confidence": 0.9 if context else 0.5,
     }
 
 

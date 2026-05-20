@@ -1,12 +1,14 @@
 # app/answer_builder.py
 """
-FineFlow Nova — Answer Builder (Production Final v5)
-- Uses client KB exactly as provided — no KB modifications
-- Social, casual, thanks, vague query handling
-- History-aware OpenAI fallback with hard-grounded system prompt
-- Clean output: no asterisks, arrows, ± symbols, underscores, or markdown
-- Professional tone matching client's brief
+FineFlow Nova — Answer Builder (Production Final v6)
+- Strict topic guard: only answers FineFlow questions
+- Client-approved answers loaded from KB
+- Corrected pricing: Essential £99, Core £199, Elite £499, overage £2.50, PAYG £2.75
+- Temperature 0.0 for maximum factual consistency
+- History-aware fallback with hard-grounded system prompt
+- Clean output: no asterisks, arrows, symbols, or markdown
 - Never says "not in documentation" — always gives a useful answer
+- Never answers off-topic questions (HTML, coding, general knowledge, etc.)
 """
 
 import json
@@ -62,7 +64,7 @@ def _normalise(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Clean output — strip markdown and special symbols at render time
+# Clean output — strip markdown and special symbols
 # ---------------------------------------------------------------------------
 def _clean(text: str) -> str:
     if not text:
@@ -79,7 +81,7 @@ def _clean(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# KB matching — two-pass (exact substring + token overlap)
+# KB matching — two-pass (exact substring + token overlap, includes keywords)
 # ---------------------------------------------------------------------------
 def _kb_match(query: str) -> Optional[Dict[str, Any]]:
     nq = _normalise(query)
@@ -88,14 +90,17 @@ def _kb_match(query: str) -> Optional[Dict[str, Any]]:
     best_score = 0.0
 
     for entry in _kb:
+        # Build searchable text from question + keywords
         searchable = _normalise(entry.get("question", ""))
         keywords_raw = entry.get("keywords", [])
         if keywords_raw:
             searchable += " " + " ".join(_normalise(k) for k in keywords_raw)
 
+        # Pass 1: exact substring match
         if nq in searchable:
             return entry
 
+        # Pass 2: token overlap score
         s_tokens = set(searchable.split())
         if not s_tokens:
             continue
@@ -105,7 +110,7 @@ def _kb_match(query: str) -> Optional[Dict[str, Any]]:
             best_score = score
             best_entry = entry
 
-    if best_score >= 0.55 and best_entry:
+    if best_score >= 0.50 and best_entry:
         return best_entry
     return None
 
@@ -172,6 +177,48 @@ _THANKS = {
     "cool", "okay thanks", "ok thanks", "great thanks",
 }
 
+# ---------------------------------------------------------------------------
+# OFF-TOPIC guard — topics that have nothing to do with FineFlow
+# ---------------------------------------------------------------------------
+_OFF_TOPIC_PATTERNS = [
+    # Programming / technical
+    r"\b(html|css|javascript|python|java|php|sql|react|angular|vue|node|django|flask|api|code|coding|program|programming|developer|debug|github|docker|kubernetes|linux|bash|script|database|mysql|mongodb|postgres|aws|azure|gcp|cloud|server|deploy|devops|frontend|backend|fullstack)\b",
+    # General knowledge
+    r"\b(recipe|cook|food|restaurant|movie|film|song|music|sport|football|cricket|weather|news|politics|history|science|math|geography|capital city|president|prime minister|celebrity|actor|actress)\b",
+    # Personal / other AI tasks
+    r"\b(write me a poem|tell me a joke|essay|story|translate|summarise this|summarize this|proofread|cover letter|cv|resume|homework|assignment)\b",
+    # Competitor / unrelated products
+    r"\b(chatgpt|openai|google|bing|alexa|siri|cortana|amazon|facebook|instagram|twitter|tiktok|linkedin|whatsapp|youtube)\b",
+]
+
+_OFF_TOPIC_COMPILED = [re.compile(p, re.IGNORECASE) for p in _OFF_TOPIC_PATTERNS]
+
+
+def _is_off_topic(query: str) -> bool:
+    """Return True if the query is clearly not about FineFlow."""
+    for pattern in _OFF_TOPIC_COMPILED:
+        if pattern.search(query):
+            return True
+    return False
+
+
+# ---------------------------------------------------------------------------
+# Pricing confusion — the £2 fee that does not exist
+# ---------------------------------------------------------------------------
+def _is_pricing_confusion(q: str) -> bool:
+    nq = q.lower().strip()
+    if re.match(r"^[£$]?\s*2\s*\??$", nq):
+        return True
+    patterns = [
+        r"£\s*2\s+fee",
+        r"£\s*2\s+for",
+        r"£\s*2\s+charge",
+        r"what.*£\s*2\b(?!\.\d)",
+        r"£2 for what",
+        r"2 for what",
+    ]
+    return any(re.search(p, nq) for p in patterns)
+
 
 def _is_affirmative(q: str) -> bool:
     return _normalise(q) in _AFFIRMATIVE
@@ -193,23 +240,6 @@ def _is_thanks(q: str) -> bool:
     return _normalise(q) in _THANKS
 
 
-def _is_pricing_confusion(q: str) -> bool:
-    """Detect questions about a £2 fee that does not exist in FineFlow."""
-    nq = q.lower().strip()
-    # Match standalone "2", "£2", "2?" but NOT "2.50" or "2.75"
-    if re.match(r"^[£$]?\s*2\s*\??$", nq):
-        return True
-    patterns = [
-        r"£\s*2\s+fee",
-        r"£\s*2\s+for",
-        r"£\s*2\s+charge",
-        r"what.*£\s*2\b(?!\.\d)",
-        r"£2 for what",
-        r"2 for what",
-    ]
-    return any(re.search(p, nq) for p in patterns)
-
-
 def _is_vague(q: str) -> bool:
     nq = _normalise(q)
     all_special = _AFFIRMATIVE | _NEGATIVE | _GREETINGS | _SOCIAL | _THANKS
@@ -217,100 +247,102 @@ def _is_vague(q: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Static rich responses
+# Static rich responses (corrected pricing)
 # ---------------------------------------------------------------------------
 
-_SYSTEM_BREAKDOWN = """Here is how FineFlow works from start to finish:
+_SYSTEM_BREAKDOWN = """Here is how Fine Flow works from start to finish:
 
 1. Ingestion
-FineFlow monitors your connected email inbox every minute. When a penalty notice arrives it is detected automatically — no manual forwarding needed.
+Fine Flow monitors your connected email inbox every minute. When a penalty notice arrives it is detected automatically with no manual forwarding needed.
 
 2. Extraction
-The system reads the email or attachment and pulls out the key fields: fine amount, PCN reference, vehicle registration, issue date and time, due date, violation type, and location. The fine is created with status RECEIVED.
+The system reads the email or attachment and pulls out the key fields: fine amount, PCN reference, vehicle registration, issue date and time, due date, violation type and location. The fine is created with status RECEIVED.
 
 3. Assignment
-Using your uploaded driver logs (CSV or system data), FineFlow matches the fine to the responsible driver by checking vehicle registration, date within plus or minus one day, and time window. A clear match means the fine is ASSIGNED. No match means it is UNASSIGNED and placed in the admin review queue. A conflicting match is flagged as REVIEW_REQUIRED for the admin to resolve.
+Using your uploaded driver logs, Fine Flow matches the fine to the responsible driver by checking vehicle registration, date within one day, and time window. A clear match means the fine is ASSIGNED. No match means it is UNASSIGNED and placed in the admin review queue.
 
 4. Driver Action
 The assigned driver confirms responsibility, setting the status to CONFIRMED, or raises a dispute with a reason and optional evidence, setting it to DISPUTED.
 
 5. Disputes and Appeals
-The admin reviews disputed fines. If accepted, the appeal is prepared and submitted to the issuing authority and the status becomes UNDER REVIEW. If rejected, the fine returns to an active payable state. All outcomes are tracked and used to improve future appeal recommendations.
+The admin reviews disputed fines. If accepted, the appeal is prepared and submitted to the issuing authority and the status becomes UNDER REVIEW. Outcomes are tracked and used to improve future appeal recommendations.
 
 6. Tracking and Outcomes
 Every fine has a live status on the dashboard. Fines past their due date are flagged OVERDUE nightly. Final outcomes are PAID, CANCELLED if the appeal was won, or OVERDUE.
 
 Which stage would you like to go deeper on?"""
 
-_PLAN_COMPARISON = """Here is how the plans compare so you can find the right fit:
+_PLAN_COMPARISON = """Here is how the plans compare:
 
-Core at £99 per month covers fleets up to 50 vehicles with 100 fines included. It is the most cost-efficient entry point for smaller operations.
+Essential at £99 per month covers fleets up to 50 vehicles. A great entry point for smaller operations.
 
-Essential at £199 per month covers up to 100 vehicles with 300 fines included. A solid choice for mid-sized fleets with steady fine volumes.
+Core at £199 per month covers up to 100 vehicles. Solid for mid-sized fleets with steady fine volumes.
 
-Advanced at £399 per month handles up to 200 vehicles and 700 fines per month. Built for larger operations where volume is consistent.
+Elite at £499 per month is unlimited vehicles. Designed for high-volume fleets where running out of allowance is not an option.
 
-Elite at £499 per month is unlimited vehicles with 1,000 fines included. Designed for high-volume fleets where running out of allowance is not an option.
+All plans charge £0.75 per fine within your allowance and £2.50 per fine if you go over. If you have a low or unpredictable volume, the pay-as-you-go option at £2.75 per fine with no subscription is worth considering.
 
-If your volume is low or unpredictable, the pay-per-fine option at £2.75 per fine with no subscription is worth considering.
+How many vehicles do you run?"""
 
-All plans charge £0.75 per fine within your allowance and £2.50 per fine if you go over. How many vehicles do you run?"""
 
 # ---------------------------------------------------------------------------
-# System prompt for OpenAI fallback
+# System prompt for OpenAI fallback — enterprise level, strict topic lock
 # ---------------------------------------------------------------------------
 _SYSTEM_PROMPT = """You are Nova, the AI assistant for FineFlow — a UK fleet fine (PCN) management platform.
 
-Your job is to answer questions about FineFlow clearly, confidently and helpfully. You sound like a knowledgeable product expert, not a search engine. You never say things like "not specified in the context", "I cannot confirm", "as of my last update", or "the documentation doesn't mention". If you do not have a specific detail, you give the most useful answer you can and suggest the dashboard or support team for anything account-specific.
+CRITICAL RULE — TOPIC LOCK:
+You ONLY answer questions about FineFlow. If someone asks about anything else — coding, HTML, recipes, general knowledge, other software, personal advice, or any topic unrelated to FineFlow — you must politely decline and redirect. Example: "I can only help with FineFlow questions. Is there anything about fines, pricing, appeals or the platform I can help you with?"
+
+You sound like a knowledgeable product expert, not a search engine. You never say "not specified in the context", "I cannot confirm", "as of my last update", or "the documentation does not mention this". If you do not have a specific detail, give the most useful answer you can and suggest the dashboard or support team for anything account-specific.
 
 FORMATTING — always follow these rules:
 - Write in plain professional English. No markdown.
-- No asterisks, no underscores, no arrows, no symbols like +/-.
-- Do not start responses with numbered lists. Lead with a sentence.
-- No filler phrases like "Certainly!", "Great question!", or "Of course!".
+- No asterisks, no underscores, no arrows, no symbols.
+- Do not start with filler phrases like "Certainly!", "Great question!", or "Of course!".
 - Be concise. One idea per sentence. No repetition.
+- If listing items, write them as numbered lines not bullet points.
 
-PRODUCT FACTS — use only these, never invent:
+PRODUCT FACTS — use only these exact values, never invent or change them:
+
+PRICING (EXACT — never change these numbers):
+Essential: £99 per month, up to 50 vehicles.
+Core: £199 per month, up to 100 vehicles.
+Elite: £499 per month, unlimited vehicles.
+All plans: £0.75 per fine within monthly allowance.
+Overage: £2.50 per fine beyond the plan limit. There is NO £2.00 fee anywhere.
+Pay-as-you-go (no subscription): £2.75 per fine.
+The £0.75 fee applies once per fine only.
 
 WHAT FINEFLOW DOES:
-Monitors connected email inbox every minute for incoming fine or PCN notices. Extracts fine amount, PCN reference, vehicle registration, issue date and time, due date, location, and violation type. Matches fines to drivers using vehicle registration, date within plus or minus one day, and time window against driver logs (CSV or system data). No match puts the fine in the UNASSIGNED queue for manual admin review. Multiple matches create a REVIEW_REQUIRED status. Does not automatically pay fines — payment portals are external authority sites with bot protection.
+Monitors connected email inbox every minute for incoming fine or PCN notices. Extracts fine amount, PCN reference, vehicle registration, issue date and time, due date, location and violation type. Matches fines to drivers using vehicle registration, date within one day and time window against driver logs. No match puts the fine in the UNASSIGNED queue for manual admin review. Does not automatically pay fines — payment portals are external authority sites with bot protection.
 
 FINE STATUSES in order:
-RECEIVED, then UNASSIGNED or ASSIGNED, then CONFIRMED or DISPUTED, then PAID or CANCELLED or OVERDUE. REVIEW_REQUIRED resolves to ASSIGNED after admin action.
+RECEIVED, then UNASSIGNED or ASSIGNED, then CONFIRMED or DISPUTED, then PAID or CANCELLED or OVERDUE. UNDER REVIEW when appeal is sent to authority.
 
 APPEAL WORKFLOW:
-Driver disputes. Admin reviews. Accepted means UNDER REVIEW, appeal sent to authority. Rejected means fine returns to active payable state. Full lifecycle: Submitted, Under Review, Accepted or Rejected, Closed. Outcomes tracked to improve future recommendations. Win percentage is guidance only, not a guarantee.
+Driver disputes. Admin reviews. Accepted means UNDER REVIEW, appeal sent to authority. Rejected means fine returns to active payable state. Outcomes tracked to improve future recommendations. Win percentage is guidance only, not a guarantee.
 
 OVERDUE SCHEDULER:
-Runs nightly at midnight. Any RECEIVED, UNASSIGNED, ASSIGNED, or CONFIRMED fine past its due date becomes OVERDUE.
-
-PRICING — exact, never change:
-Core: £99 per month, up to 50 vehicles, 100 fines included.
-Essential: £199 per month, up to 100 vehicles, 300 fines included.
-Advanced: £399 per month, up to 200 vehicles, 700 fines included.
-Elite: £499 per month, unlimited vehicles, 1,000 fines included.
-All plans: £0.75 per fine within monthly allowance.
-Overage: £2.50 per fine beyond the plan limit. There is NO £2.00 fee.
-Pay-per-fine no subscription: £2.75 per fine in prepaid blocks.
-The £0.75 fee applies once per fine only. Appeals, reassignments, disputes, and payment do not create additional charges. Monthly allowance resets each period with no rollover.
+Runs nightly at midnight. Any RECEIVED, UNASSIGNED, ASSIGNED or CONFIRMED fine past its due date becomes OVERDUE.
 
 BILLING:
-Overage collected at end of billing cycle. Cannot resubscribe with outstanding balance. Cancellation triggers a cooldown until end of the current billing period.
+Overage collected at end of billing cycle. Cannot resubscribe with outstanding balance. Cancellation triggers cooldown until end of current billing period. Credits do not roll over.
 
 SECURITY:
-JWT auth 24 hour expiry. Bcrypt passwords. AES-256-CBC for Gmail tokens. GDPR compliant — no data sold or shared. Payments handled externally via Stripe. FineFlow never stores raw card details.
+JWT auth 24-hour expiry. Bcrypt passwords. AES-256-CBC for Gmail tokens. GDPR compliant — no data sold or shared. Payments handled externally via Stripe. FineFlow never stores raw card details.
 
 SOCIAL QUERIES:
-If the user makes small talk or asks how you are, respond briefly and warmly, then redirect to FineFlow. Keep it human — one or two sentences maximum. Never answer a social question with product information.
+If someone makes small talk or asks how you are, respond briefly and warmly in one or two sentences then redirect to FineFlow. Never answer social questions with product information.
 
-UNKNOWN QUERIES:
-If something is genuinely outside your knowledge of FineFlow, give the closest useful answer you can, then say the dashboard or support team can confirm specifics. Never refuse to engage.
+OFF-TOPIC QUERIES:
+If someone asks about coding, HTML, CSS, Python, recipes, general knowledge, other tools, or anything not related to FineFlow, say: "I can only help with FineFlow questions. Is there anything about fines, pricing, appeals or the platform I can help you with?"
 """
 
+
 # ---------------------------------------------------------------------------
-# OpenAI call
+# OpenAI call — temperature 0.0 for maximum factual accuracy
 # ---------------------------------------------------------------------------
-def _call_openai(messages: List[Dict[str, str]], max_tokens: int = 400) -> Optional[str]:
+def _call_openai(messages: List[Dict[str, str]], max_tokens: int = 450) -> Optional[str]:
     if not OPENAI_API_KEY:
         return None
     try:
@@ -323,7 +355,7 @@ def _call_openai(messages: List[Dict[str, str]], max_tokens: int = 400) -> Optio
             json={
                 "model": OPENAI_MODEL,
                 "messages": messages,
-                "temperature": 0.2,
+                "temperature": 0.0,      # Maximum factual consistency
                 "max_tokens": max_tokens,
             },
             timeout=20,
@@ -345,7 +377,7 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
     if not query:
         return {"answer": "Ask me anything about FineFlow.", "confidence": 1.0}
 
-    # Greeting
+    # --- Greeting ---
     if _is_greeting(query):
         _set_ctx(session_id, None)
         return {
@@ -353,21 +385,21 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
             "confidence": 1.0,
         }
 
-    # Social small talk
+    # --- Social small talk ---
     if _is_social(query):
         return {
             "answer": "Doing well, thanks for asking. I'm here whenever you need help with fines, pricing, appeals, or anything FineFlow related.",
             "confidence": 1.0,
         }
 
-    # Thanks / acknowledgement
+    # --- Thanks / acknowledgement ---
     if _is_thanks(query):
         return {
             "answer": "Happy to help. Is there anything else you would like to know about FineFlow?",
             "confidence": 1.0,
         }
 
-    # Negative / decline
+    # --- Negative / decline ---
     if _is_negative(query):
         _add_turn(session_id, "user", query)
         answer = "No problem. Is there anything else about FineFlow I can help you with?"
@@ -375,53 +407,57 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
         _set_ctx(session_id, None)
         return {"answer": answer, "confidence": 1.0}
 
-    # Pricing confusion — the £2 fee that does not exist
+    # --- Pricing confusion — the £2 fee that does not exist ---
     if _is_pricing_confusion(query):
         answer = (
-            "There is no £2 fee in FineFlow. The fees are:\n\n"
-            "- £0.75 per fine within your monthly allowance on any subscription plan\n"
-            "- £2.50 per fine when you exceed your monthly allowance\n"
-            "- £2.75 per fine on the pay-per-fine option with no subscription\n\n"
+            "There is no £2 fee in FineFlow. Here is a clear breakdown:\n\n"
+            "£0.75 per fine within your monthly allowance on any subscription plan.\n"
+            "£2.50 per fine when you exceed your monthly allowance.\n"
+            "£2.75 per fine on the pay-as-you-go option with no subscription.\n\n"
             "Which one would you like more detail on?"
         )
         _add_turn(session_id, "user", query)
         _add_turn(session_id, "assistant", answer)
         return {"answer": answer, "confidence": 1.0}
 
-    # Vague short query
+    # --- OFF-TOPIC GUARD — must come before vague/affirmative checks ---
+    if _is_off_topic(query):
+        answer = "I can only help with FineFlow questions. Is there anything about fines, pricing, appeals, billing or the platform I can help you with?"
+        _add_turn(session_id, "user", query)
+        _add_turn(session_id, "assistant", answer)
+        return {"answer": answer, "confidence": 1.0}
+
+    # --- Vague short query ---
     if _is_vague(query):
         last_ctx = _get_ctx(session_id)
         if last_ctx:
             topic = last_ctx.get("category", "this topic").replace("_", " ")
             answer = f"Could you be a bit more specific? I can go deeper on {topic}, or help with something else entirely."
         else:
-            answer = "Could you give me a bit more detail? I can help with anything about FineFlow — fines, pricing, appeals, billing, or the dashboard."
+            answer = "Could you give me a bit more detail? I can help with anything about FineFlow — fines, pricing, appeals, billing or the dashboard."
         _add_turn(session_id, "user", query)
         _add_turn(session_id, "assistant", answer)
         return {"answer": answer, "confidence": 1.0}
 
-    # Affirmative follow-up
+    # --- Affirmative follow-up ---
     if _is_affirmative(query):
         last_ctx = _get_ctx(session_id)
         if last_ctx:
             cat = last_ctx.get("category", "")
             follow_up = last_ctx.get("follow_up")
 
-            # "yes" after core overview — deliver full step breakdown
             if cat == "core_overview":
                 _add_turn(session_id, "user", query)
                 _add_turn(session_id, "assistant", _SYSTEM_BREAKDOWN)
                 _set_ctx(session_id, None)
                 return {"answer": _SYSTEM_BREAKDOWN, "confidence": 1.0}
 
-            # "yes" after plan limit question — deliver plan comparison
             if follow_up and "compare" in _normalise(follow_up):
                 _add_turn(session_id, "user", query)
                 _add_turn(session_id, "assistant", _PLAN_COMPARISON)
                 _set_ctx(session_id, None)
                 return {"answer": _PLAN_COMPARISON, "confidence": 1.0}
 
-            # Generic follow-up from KB entry
             if follow_up:
                 clean_fu = _clean(follow_up)
                 _add_turn(session_id, "user", query)
@@ -429,12 +465,12 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
                 _set_ctx(session_id, None)
                 return {"answer": clean_fu, "confidence": 1.0}
 
-        answer = "Of course — what would you like to know more about? You can ask about fines, pricing, appeals, billing, or the dashboard."
+        answer = "Of course — what would you like to know more about? You can ask about fines, pricing, appeals, billing or the dashboard."
         _add_turn(session_id, "user", query)
         _add_turn(session_id, "assistant", answer)
         return {"answer": answer, "confidence": 1.0}
 
-    # KB match — client KB used exactly as provided, only cleaned at output
+    # --- KB match ---
     _add_turn(session_id, "user", query)
     kb_entry = _kb_match(query)
     if kb_entry:
@@ -445,7 +481,7 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
         _set_ctx(session_id, kb_entry)
         return {"answer": display, "confidence": 1.0}
 
-    # RAG retrieval for questions not in KB
+    # --- RAG retrieval ---
     docs: List[Dict[str, Any]] = []
     try:
         raw = rag_search(query, top_k=TOP_K)
@@ -457,7 +493,7 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
     context_chunks = [d["chunk"][:600] for d in strong_docs[:3]]
     context = "\n\n---\n\n".join(context_chunks) if context_chunks else ""
 
-    # OpenAI with full conversation history
+    # --- OpenAI fallback with full conversation history ---
     history = _get_history(session_id)
     history_without_last = history[:-1] if history else []
 
@@ -506,4 +542,4 @@ def answer_sync(q: str, session_id: str = "default") -> Dict[str, Any]:
         return build_response(q, session_id)
     except Exception:
         logger.exception("Crash in answer_sync")
-        return {"answer": "Something went wrong. Please try again.", "confidence": 0.0} 
+        return {"answer": "Something went wrong. Please try again.", "confidence": 0.0}

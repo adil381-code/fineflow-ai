@@ -336,3 +336,12 @@ json.decoder.JSONDecodeError: Invalid control character at: line 20 column 436 (
 2026-05-20 15:43:01,172 INFO Index built. Total chunks=8
 2026-05-20 15:43:09,604 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
 2026-05-20 15:43:09,813 INFO ChromaDB index found.
+2026-05-21 09:45:38,993 INFO Starting ingest from D:\fineflow-rag-clean\data\raw
+2026-05-21 09:45:38,998 INFO Wrote: Fine Flow MASTER FINAL.txt
+2026-05-21 09:45:38,999 INFO Ingest finished. written=1 skipped=0
+2026-05-21 09:45:56,779 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-05-21 09:45:56,779 INFO Building index with OpenAI embeddings (force_rebuild=True)...
+2026-05-21 09:45:56,801 INFO Cleared existing Chroma collection.
+2026-05-21 09:45:56,811 INFO Generating embeddings for 8 chunks...
+2026-05-21 09:45:59,272 INFO Indexed batch 1/1
+2026-05-21 09:45:59,272 INFO Index built. Total chunks=8

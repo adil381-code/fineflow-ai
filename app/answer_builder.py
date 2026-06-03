@@ -1,14 +1,25 @@
 # app/answer_builder.py
 """
-FineFlow Nova — Production Final v15
+FineFlow Nova — Production Final v16
 ======================================
-Fixes vs v14 based on audit:
+Three critical bugs fixed vs v15:
 
-1. QUESTION LIMITING — ask at most 1 question per 2 responses, sometimes none
-2. MODE SWITCHING — intent detection routes to explain / diagnose / persuade / support
-3. PAIN PRIORITISATION — when user has multiple issues, rank by severity
-4. CONFIDENCE CALIBRATION — distinguish known facts from uncertain/missing info
-5. CONTEXT SYNTHESIS — combine all user facts into operational insight, not repetition
+BUG 1 FIXED: "can you log into council websites" was caught by off-topic regex.
+  Fix: Added Fine Flow payment/council keywords to an allowlist that bypasses
+  off-topic guard. Any question about council sites IN the context of fines
+  is a Fine Flow question, not off-topic.
+
+BUG 2 FIXED: "23456789" accepted as a vehicle count.
+  Fix: Vehicle count capped at 50,000. Any number above that is rejected
+  gracefully with a clarifying response.
+
+BUG 3 FIXED: Impossible vehicle count contaminated profile for entire session.
+  Fix: Profile only updated when vehicle count passes sanity check.
+  Added profile.fleet_size validation before injecting into system prompt.
+
+ALSO FIXED:
+- "feel free to ask" filler endings replaced with nothing or a real question
+- Win% question after driver confirmed responsibility → context-aware response
 """
 
 import re
@@ -29,6 +40,9 @@ from app.config import (
 from app.logger import logger
 from app.retriever import rerank_hits, search as rag_search
 
+# Maximum realistic fleet size — anything above this is a typo or test
+MAX_FLEET_SIZE = 50_000
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Customer profile
@@ -44,20 +58,23 @@ class CustomerProfile:
     turn_count:    int            = 0
 
     def to_context(self) -> str:
+        # Only inject fleet_size if it passed the sanity check
         lines = []
-        if self.fleet_size:
+        if self.fleet_size and self.fleet_size <= MAX_FLEET_SIZE:
             lines.append(f"Fleet size: {self.fleet_size} vehicles")
         if self.fine_volume:
             lines.append(f"Monthly fines: ~{self.fine_volume}")
         if self.industry:
             lines.append(f"Industry: {self.industry}")
         if self.issues:
-            # Sort by severity — deadlines > disputes > manual > spreadsheets
-            priority = ["missed deadlines", "missed appeal deadlines",
-                        "driver disputes", "manual admin", "using spreadsheets", "missed fines"]
+            priority = [
+                "missed deadlines", "missed appeal deadlines",
+                "driver disputes", "manual admin",
+                "using spreadsheets", "missed fines",
+            ]
             sorted_issues = sorted(
                 self.issues,
-                key=lambda x: priority.index(x) if x in priority else 99
+                key=lambda x: priority.index(x) if x in priority else 99,
             )
             lines.append(f"Known problems (priority order): {', '.join(sorted_issues)}")
         if self.plan_interest:
@@ -67,7 +84,7 @@ class CustomerProfile:
         return "CUSTOMER CONTEXT:\n" + "\n".join(lines)
 
     def recommended_plan(self) -> Optional[str]:
-        if self.fleet_size is None:
+        if not self.fleet_size or self.fleet_size > MAX_FLEET_SIZE:
             return None
         if self.fleet_size <= 50:
             return "Essential (£99/month)"
@@ -91,6 +108,17 @@ def _clean(text: str) -> str:
     text = re.sub(r"_(.*?)_",       r"\1", text)
     text = text.replace("→", "to").replace("->", "to")
     text = text.replace("±", "plus or minus").replace("`", "")
+    # Remove weak filler endings
+    weak_endings = [
+        "feel free to ask!", "feel free to ask.",
+        "if you have any questions, feel free to ask.",
+        "if you have further questions, feel free to ask.",
+        "please let me know if you need further assistance.",
+        "don't hesitate to ask.",
+    ]
+    for ending in weak_endings:
+        if text.lower().endswith(ending.lower()):
+            text = text[: -len(ending)].rstrip(" ,.")
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
@@ -164,12 +192,12 @@ def _reset_aff(sid: str) -> None:
 
 
 def _should_ask_question(sid: str) -> bool:
-    """Return True only every 2nd response to avoid interrogation fatigue."""
+    """Ask a question on every other response to avoid interrogation fatigue."""
     with _LOCK:
         meta  = _META.setdefault(sid, {})
         count = meta.get("response_count", 0) + 1
         meta["response_count"] = count
-        return count % 2 == 0   # ask on even turns only
+        return count % 2 == 0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -203,7 +231,7 @@ def _update_profile(sid: str, query: str) -> None:
     m = _FINES_PM_RE.search(query)
     if m and p.fine_volume is None:
         val = int(m.group(1))
-        if val < 5000:   # sanity check — not a year or vehicle count
+        if val < 10_000:
             p.fine_volume = val
     m = _INDUSTRY_RE.search(query)
     if m:
@@ -218,13 +246,13 @@ def _update_profile(sid: str, query: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class Intent:
-    INFORMATIONAL = "informational"   # what is X, how does X work
-    DIAGNOSTIC    = "diagnostic"      # user describes a problem/scenario
-    BUYING        = "buying"          # pricing, plans, how to start
-    OBJECTION     = "objection"       # too expensive, use spreadsheets
-    CONVINCE      = "convince"        # convince me, why should I
-    AFFIRMATIVE   = "affirmative"     # yes/sure/go on
-    SOCIAL        = "social"          # hi, how are you
+    INFORMATIONAL = "informational"
+    DIAGNOSTIC    = "diagnostic"
+    BUYING        = "buying"
+    OBJECTION     = "objection"
+    CONVINCE      = "convince"
+    AFFIRMATIVE   = "affirmative"
+    SOCIAL        = "social"
     OFF_TOPIC     = "off_topic"
     UNKNOWN       = "unknown"
 
@@ -343,6 +371,22 @@ _PURE_FILLER = {
     "anything", "something", "whatever",
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Off-topic guard
+# Fine Flow-related terms must NEVER be caught here.
+# Added explicit allowlist for payment/council/authority questions.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# These phrases are ALWAYS Fine Flow questions even if they contain
+# words that might look off-topic (council, website, authority, log in)
+_FINE_FLOW_ALLOWLIST_RE = re.compile(
+    r"\b(council|authority|authorities|payment portal|log into|login to"
+    r"|pay.*fine|fine.*pay|appeal.*fine|fine.*appeal"
+    r"|pcn|penalty charge|parking fine|fleet fine"
+    r"|fineflow|fine flow)\b",
+    re.IGNORECASE,
+)
+
 _OFF_TOPIC_PATTERNS = [
     r"\b(html|css|javascript|typescript|python|java|php|sql|react|angular"
     r"|vue|node\.?js|django|flask|docker|kubernetes|github|devops"
@@ -361,11 +405,14 @@ _OFF_TOPIC_RE = [re.compile(p, re.IGNORECASE) for p in _OFF_TOPIC_PATTERNS]
 
 
 def _is_off_topic(q: str) -> bool:
+    # Never block Fine Flow-related questions
+    if _FINE_FLOW_ALLOWLIST_RE.search(q):
+        return False
     return any(p.search(q) for p in _OFF_TOPIC_RE)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Vehicle count extraction
+# Vehicle count extraction — with sanity check
 # ─────────────────────────────────────────────────────────────────────────────
 
 _VEH_EXPLICIT_RE = re.compile(
@@ -387,18 +434,26 @@ _DRIVER_CTX_RE = re.compile(
 def _extract_vehicle_count(query: str, sid: str) -> Optional[int]:
     if _DRIVER_CTX_RE.search(query):
         return None
+
+    raw: Optional[int] = None
     m = _VEH_EXPLICIT_RE.search(query)
     if m:
-        return int(m.group(1))
-    m = _VEH_FLEET_RE.search(query)
-    if m:
-        return int(m.group(1))
-    m = _VEH_BARE_RE.match(query)
-    if m:
+        raw = int(m.group(1))
+    elif (m := _VEH_FLEET_RE.search(query)):
+        raw = int(m.group(1))
+    elif (m := _VEH_BARE_RE.match(query)):
         lt = _gmeta(sid, "last_topic") or ""
         if lt in PRICING_TOPICS:
-            return int(m.group(1))
-    return None
+            raw = int(m.group(1))
+
+    if raw is None:
+        return None
+
+    # Sanity check — reject impossible numbers
+    if raw > MAX_FLEET_SIZE:
+        return -1   # sentinel: impossible number detected
+
+    return raw
 
 
 def _plan_for_vehicles(n: int, p: CustomerProfile) -> str:
@@ -460,7 +515,7 @@ def _detect_topic(text: str) -> Optional[str]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# System prompt — dynamically built with customer context + mode instruction
+# System prompt
 # ─────────────────────────────────────────────────────────────────────────────
 
 _BASE_PROMPT = """You are Nova, the AI assistant for Fine Flow — a UK fleet fine and PCN management platform.
@@ -471,45 +526,44 @@ You speak to fleet managers across the UK. Be warm, professional and concise.
 ABSOLUTE RULES
 ════════════════════
 
-RULE 1 — TOPIC LOCK
-Only answer Fine Flow questions. For anything else:
+1. TOPIC LOCK
+Only answer Fine Flow questions. For anything unrelated:
 "I can only help with Fine Flow questions — is there anything about fines, pricing, appeals or the platform I can help you with?"
 
-RULE 2 — LENGTH
-2 to 4 sentences maximum. No bullet lists. No long paragraphs.
+2. LENGTH
+2 to 4 sentences maximum for most answers. Never use bullet lists or long paragraphs in conversation.
 
-RULE 3 — QUESTION LIMITING (CRITICAL)
-Do NOT end every response with a question. Ask a question only when:
-  - You need information to give a better answer (fleet size unknown, problem unclear)
-  - The user has just received a recommendation and you want to confirm fit
-  Otherwise: make your point and stop. Let the user lead. This prevents interrogation fatigue.
+3. QUESTION LIMITING
+Do NOT end every response with a question. Ask a question only when you genuinely need information to give a better answer. Otherwise: make your point clearly and stop. This prevents interrogation fatigue.
 
-RULE 4 — USE CUSTOMER CONTEXT
-Always reference what the customer has already told you. Never give a generic answer when you have their specific details. If you know fleet size, fine volume and problems — weave them into your answer.
+4. USE CUSTOMER CONTEXT
+Always reference what the customer has already told you. Never repeat their own words back to them — synthesise it into insight. If you know fleet size, fine volume and problems, weave them into your answer naturally.
 
-RULE 5 — PRIORITISE PAIN
+5. PRIORITISE PAIN
 When a user has multiple problems, address the highest-risk one first:
-  Priority order: missed deadlines > driver disputes > manual admin > volume > spreadsheets
+Priority: missed deadlines > driver disputes > manual admin > volume > spreadsheets
 
-RULE 6 — TONE
+6. TONE
 Warm, direct, confident. Never start with "Certainly!", "Great question!", "Of course!". Just answer.
 
-RULE 7 — NO FORMATTING
+7. NO FORMATTING
 No bullet points. No bold. No asterisks. Plain conversational English only.
 
-RULE 8 — NEVER INVENT
-Only use facts from the context provided or the facts below. If something is not in your knowledge base, say: "I do not have that specific detail — the team at ff.sales@fineflow.com can confirm."
+8. NEVER INVENT
+Only use facts from context or the facts listed below. If you do not have a specific detail, say: "I do not have that specific detail — the team at ff.sales@fineflow.com can confirm."
 
-RULE 9 — CONFIDENCE CALIBRATION
-Known facts → state confidently.
-Partial info → say "typically" or "in most cases".
-Missing info → say "I do not have that specific detail".
-Never assert something you are not certain about.
+9. CONFIDENCE
+Known facts → state confidently. Partial info → say "typically". Missing info → say "I don't have that detail."
+
+10. NO WEAK ENDINGS
+Never end with "feel free to ask", "don't hesitate to ask", or "please let me know if you need anything." These are filler. Either ask a real question or simply stop.
 
 ════════════════════
 PAYMENT — NEVER WRONG
 ════════════════════
-Fine Flow does NOT pay fines automatically. Payment is always done by the user on the authority's website. Say NO clearly.
+Fine Flow does NOT log into council or authority websites. Fine Flow does NOT pay fines automatically.
+Payment is always completed by the user on the authority's own website.
+Fine Flow handles everything up to that step — capturing, assigning, organising — so payment takes seconds.
 
 ════════════════════
 FINE FLOW FACTS
@@ -523,63 +577,55 @@ Elite: £499/month — unlimited vehicles
 Per fine within allowance: £0.75
 Overage: £2.50 per fine
 Pay-as-you-go (no subscription): £2.75 per fine
-All plans: identical features, no paywalls.
-No £2.00 fee exists.
+All plans: identical features, no paywalls. No £2.00 fee exists.
 
 REFERRAL:
-Active programme. Credits on referral: 100 (1-25 vehicles), 250 (26-100), 750 (101-500), 2000 (500+).
-Silver 3 referrals = 100 bonus credits; Gold 5 = 10% off 12mo; Platinum 10 = 15% off 12mo; Titan 25 = 20% off for life.
+Active programme. Credits: 100 (1-25v), 250 (26-100v), 750 (101-500v), 2000 (500+v).
+Silver 3=100 credits; Gold 5=10% off 12mo; Platinum 10=15% off 12mo; Titan 25=20% for life.
 New joiners with referral code: £75 credits.
 
-CONTACT: Phone +47 32 28 50 00 | Email ff.sales@fineflow.com
+CONTACT: +47 32 28 50 00 | ff.sales@fineflow.com
 Offices: Edinburgh, Glasgow, Belfast, Manchester, London, Dublin, Hamburg
 
-BILLING: Monthly via Stripe. No credit rollover. £10/vehicle if limit exceeded.
-SECURITY: JWT 24hr, bcrypt, AES-256-CBC. GDPR compliant. No card details stored.
-
-SAVINGS: Up to 80% admin time reduction.
-Small fleet (up to 50 vehicles): £400+/month. Medium (51-200): £1,200+/month. Large (200+): £4,000+/month.
+BILLING: Monthly via Stripe. No rollover. £10/vehicle over limit.
+SECURITY: JWT 24hr, bcrypt, AES-256-CBC. GDPR. No card storage.
+SAVINGS: 80% admin time cut. Small fleet: £400+/mo. Medium: £1,200+/mo. Large: £4,000+/mo.
 
 ════════════════════
-RESPONSE MODES — use the one that fits
+RESPONSE MODES
 ════════════════════
 
-EXPLAIN mode (user asks "what is X" or "how does X work"):
-  Answer directly and concisely. No question needed unless clarification would genuinely help.
+EXPLAIN: Answer directly. No question needed unless clarification helps.
 
-DIAGNOSE mode (user describes a problem or specific fine):
-  Ask 1-2 targeted clarifying questions first. Do not immediately sell Fine Flow.
-  Example: "Which authority issued it, and has the driver confirmed responsibility?"
+DIAGNOSE: User describes a specific fine or problem → ask 1-2 targeted questions first. Do not immediately pitch Fine Flow.
 
-PERSUADE mode (user says "convince me" or "why should I"):
-  Use their specific data. Reference their fleet size, fine volume and known problems.
-  Be direct about value. Do not use generic marketing language.
+PERSUADE: User says convince me → use their specific data (fleet size, volume, problems). Never use generic copy.
 
-SUPPORT mode (user raises an objection):
-  Acknowledge their point first. Then reframe with their specific situation.
-  Example: "That is a fair point. With 150 fines a month though, the time saving alone typically covers the cost in the first week."
+SUPPORT: User raises an objection → acknowledge it first, then reframe with their situation.
 
-CLOSE mode (user says yes/sure repeatedly after a recommendation):
-  Stop explaining features. Give contact details and invite them to reach out.
+CLOSE: User says yes/sure repeatedly → stop explaining. Give contact details. +47 32 28 50 00 or ff.sales@fineflow.com.
 
 ════════════════════
-STYLE EXAMPLES
+CORRECT RESPONSE EXAMPLES
 ════════════════════
 
-[PERSUADE — fleet known]
-"Based on your 80-vehicle logistics fleet with 150 fines a month, your team is likely spending 10 to 15 admin hours monthly before you even get to appeals. Fine Flow automates assignment, dispute handling and deadline tracking end to end. At £199 a month on the Core plan, most fleets your size recover that cost within the first week."
+[PERSUADE with data]
+"Based on your 80-vehicle logistics fleet with 150 fines a month and frequent driver disputes, your team is likely spending 10 to 15 hours a month on admin before you even get to appeals. Fine Flow automates all of that — assignment, dispute handling, deadline tracking — end to end. At £199 a month on the Core plan, most fleets your size recover that cost in the first week."
 
-[DIAGNOSE — specific fine]
+[DIAGNOSE]
 "Happy to help with that. Which authority issued the fine, and has the driver confirmed or disputed responsibility?"
 
 [SUPPORT — spreadsheet objection]
-"Spreadsheets work until the volume or complexity gets away from you. With your fine volume, the risk is not the tracking — it is the missed deadlines and incorrectly assigned disputes that cost real money. Fine Flow eliminates both automatically."
+"That works up to a point, but with your volume the risk is the missed deadlines and incorrectly assigned disputes — those are what cost real money. Fine Flow eliminates both automatically."
 
-[EXPLAIN — no question needed]
+[EXPLAIN — no question]
 "Fine Flow monitors your Gmail inbox every minute, extracts fine details using AI, and matches each fine to the correct driver using your vehicle logs. If no match is found, it flags the fine for manual review so nothing slips through."
 
-[CLOSE — repeated yes]
+[CLOSE]
 "The best next step is to get in touch directly — call +47 32 28 50 00 or email ff.sales@fineflow.com and the team will have you set up quickly."
+
+[COUNCIL WEBSITES]
+"Fine Flow does not log into council or authority websites — payment portals use bot detection and card verification that blocks all automation. What Fine Flow does is organise everything so when you do pay on the authority's site, it takes seconds rather than the usual hour of chasing."
 """
 
 
@@ -587,8 +633,11 @@ def _build_system_prompt(profile: CustomerProfile, mode: str = "") -> str:
     parts = [_BASE_PROMPT]
     ctx = profile.to_context()
     if ctx:
-        parts.append(f"\n{ctx}")
-        parts.append("Always reference this customer information in your responses where relevant. Never repeat what they told you back to them verbatim — synthesise it into insight.")
+        parts.append(
+            f"\n{ctx}\n"
+            "Always reference this customer information naturally in your responses. "
+            "Synthesise it into insight — do not just repeat it back."
+        )
     if mode:
         parts.append(f"\nCURRENT MODE: {mode}")
     return "\n".join(parts)
@@ -641,7 +690,7 @@ def _retrieve(query: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Build GPT-4o messages
+# Build messages
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _make_messages(
@@ -670,8 +719,8 @@ def _make_messages(
 # ─────────────────────────────────────────────────────────────────────────────
 
 _EXPAND = {
-    "pricing":             "Explain what is included in Fine Flow plans concisely. Ask how many vehicles they have if unknown.",
-    "plan_recommendation": "Explain what every Fine Flow plan includes in 2-3 sentences. Do not list all plans again. Ask if they want to get in touch.",
+    "pricing":             "Explain what is included in Fine Flow plans concisely.",
+    "plan_recommendation": "Explain what every Fine Flow plan includes in 2-3 sentences. Ask if they want to get in touch.",
     "appeals":             "Explain the Fine Flow appeal process end to end in 2-3 sentences.",
     "driver_mgmt":         "Explain how drivers are added and matched to fines.",
     "referral":            "Explain the referral credit rewards and tier discounts.",
@@ -682,7 +731,7 @@ _EXPAND = {
     "email":               "Explain Gmail monitoring and fine extraction.",
     "overdue":             "Explain how Fine Flow handles overdue fines and deadlines.",
     "matching":            "Explain the three criteria used to match fines to drivers.",
-    "sign_up":             "Tell them to call +47 32 28 50 00 or email ff.sales@fineflow.com to get started.",
+    "sign_up":             "Tell them to call +47 32 28 50 00 or email ff.sales@fineflow.com.",
 }
 _DEFAULT_EXPAND = "Look at the conversation history and expand on the most recent topic in 2-3 sentences."
 _CLOSE_SALE     = (
@@ -691,7 +740,8 @@ _CLOSE_SALE     = (
 )
 
 
-def _affirmative_response(sid: str, history: List[Dict[str, str]], p: CustomerProfile) -> str:
+def _affirmative_response(sid: str, history: List[Dict[str, str]],
+                           p: CustomerProfile) -> str:
     aff_count = _inc_aff(sid)
     lt        = _gmeta(sid, "last_topic") or ""
 
@@ -701,7 +751,7 @@ def _affirmative_response(sid: str, history: List[Dict[str, str]], p: CustomerPr
 
     prompt  = _EXPAND.get(lt, _DEFAULT_EXPAND)
     context = _retrieve(lt.replace("_", " ")) if lt else ""
-    system  = _build_system_prompt(p, "CLOSE mode: stop asking questions, give the answer and optionally offer to connect them with sales")
+    system  = _build_system_prompt(p, "CLOSE: stop asking questions, give the answer")
 
     msgs = [{"role": "system", "content": system}]
     msgs.extend(history[-8:])
@@ -764,17 +814,24 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
         _reset_aff(session_id)
         lt = _gmeta(session_id, "last_topic")
         if lt:
-            return {"answer": f"Glad that is useful. Feel free to ask anything else about Fine Flow.", "confidence": 1.0}
+            return {"answer": "Glad that is useful. Is there anything else about Fine Flow I can help with?", "confidence": 1.0}
         return {"answer": "Is there anything about Fine Flow I can help you with today — pricing, fines, appeals or the dashboard?", "confidence": 1.0}
 
+    # Off-topic — with allowlist for Fine Flow-related terms
     if _is_off_topic(query):
         a = "I can only help with Fine Flow questions — is there anything about fines, pricing, appeals or the platform I can help you with?"
         _push(session_id, "user", query)
         _push(session_id, "assistant", a)
         return {"answer": a, "confidence": 1.0}
 
-    # Vehicle count
+    # Vehicle count with sanity check
     vc = _extract_vehicle_count(query, session_id)
+    if vc == -1:
+        # Impossible number — reject gracefully, do not update profile
+        a = "That does not look right — could you double-check that number? How many vehicles are in your fleet?"
+        _push(session_id, "user", query)
+        _push(session_id, "assistant", a)
+        return {"answer": a, "confidence": 1.0}
     if vc is not None:
         _reset_aff(session_id)
         a = _plan_for_vehicles(vc, p)
@@ -786,10 +843,10 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
     # Purchase intent
     if _PURCHASE_RE.search(query):
         _reset_aff(session_id)
+        suffix = "" if p.fleet_size else " How many vehicles are in your fleet so I can point you to the right plan?"
         a = (
             "To get started, contact the Fine Flow sales team on +47 32 28 50 00 "
-            "or at ff.sales@fineflow.com — they will get you set up quickly. "
-            + ("" if p.fleet_size else "How many vehicles are in your fleet so I can point you to the right plan?")
+            f"or at ff.sales@fineflow.com — they will get you set up quickly.{suffix}"
         )
         _push(session_id, "user", query)
         _push(session_id, "assistant", a)
@@ -811,7 +868,6 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
     _reset_aff(session_id)
     _push(session_id, "user", query)
 
-    # Detect intent → set mode and extra instruction
     intent = _detect_intent(query, nq, _AFFIRMATIVE, _PURE_FILLER)
     mode   = ""
     extra  = ""
@@ -820,34 +876,34 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
         mode  = "DIAGNOSE"
         extra = (
             "The user has described a specific fine or problem. "
-            "Ask 1-2 short targeted diagnostic questions (e.g. which authority, when issued, "
-            "has driver confirmed). Do NOT immediately explain Fine Flow features. Be helpful first."
+            "Ask 1-2 short targeted clarifying questions first. "
+            "Do NOT immediately explain Fine Flow. Be genuinely helpful."
         )
     elif intent == Intent.CONVINCE:
         mode = "PERSUADE"
         if p.fleet_size or p.fine_volume or p.issues:
             extra = (
                 "Give a tailored, specific value argument using the customer's own data. "
-                "Reference their fleet size, fine volume and problems directly. "
-                "Do not use generic marketing copy. Be direct and specific about ROI."
+                "Reference their fleet size, fine volume and known problems directly. "
+                "Do not use generic marketing copy. Be direct about ROI."
             )
         else:
-            extra = "Ask about fleet size and fine volume before pitching — you need their data to give a tailored answer."
+            extra = "Ask about fleet size and fine volume first — you need their data to give a tailored answer."
     elif intent == Intent.OBJECTION:
         mode  = "SUPPORT"
         extra = (
-            "Acknowledge their objection first — do not dismiss it. "
+            "Acknowledge their point first without dismissing it. "
             "Then reframe using their specific situation if known. "
-            "Keep it to 2-3 sentences. Do not oversell."
+            "2-3 sentences max. Do not oversell."
         )
     elif intent == Intent.BUYING:
         mode  = "CLOSE"
         extra = "Focus on helping them choose the right plan. Ask fleet size if not known."
 
-    # Ask question only on even turns
+    # Question limiting — only ask on every other response
     ask_q = _should_ask_question(session_id)
     if not ask_q and not extra:
-        extra = "Do NOT end this response with a question. Make your point and stop."
+        extra = "Do NOT end this response with a question. Make your point clearly and stop."
 
     context  = _retrieve(query)
     history  = _hist(session_id)

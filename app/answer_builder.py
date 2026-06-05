@@ -1,30 +1,25 @@
 # app/answer_builder.py
 """
-FineFlow Nova — Production Final v16
-======================================
-Three critical bugs fixed vs v15:
+FineFlow Nova — Production Final v18
+ARCHITECTURE:
+  Tier 1: Deterministic (greetings, identity, vehicle count, off-topic) — instant, no AI
+  Tier 2: KB match → returns client's EXACT approved answer verbatim
+  Tier 3: RAG + GPT-4o for anything not in KB
 
-BUG 1 FIXED: "can you log into council websites" was caught by off-topic regex.
-  Fix: Added Fine Flow payment/council keywords to an allowlist that bypasses
-  off-topic guard. Any question about council sites IN the context of fines
-  is a Fine Flow question, not off-topic.
-
-BUG 2 FIXED: "23456789" accepted as a vehicle count.
-  Fix: Vehicle count capped at 50,000. Any number above that is rejected
-  gracefully with a clarifying response.
-
-BUG 3 FIXED: Impossible vehicle count contaminated profile for entire session.
-  Fix: Profile only updated when vehicle count passes sanity check.
-  Added profile.fleet_size validation before injecting into system prompt.
-
-ALSO FIXED:
-- "feel free to ask" filler endings replaced with nothing or a real question
-- Win% question after driver confirmed responsibility → context-aware response
+KEY BEHAVIOURS:
+  - KB answers returned word for word — consistent every time
+  - Follow-up questions asked naturally (from KB entry or GPT)
+  - Customer profile (fleet size, volume, issues) injected into every GPT call
+  - Warm human tone — not robotic
+  - Question limiting — not every response ends with a question
+  - Mode switching — diagnose / persuade / support
 """
 
+import json
 import re
 import threading
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -40,8 +35,75 @@ from app.config import (
 from app.logger import logger
 from app.retriever import rerank_hits, search as rag_search
 
-# Maximum realistic fleet size — anything above this is a typo or test
 MAX_FLEET_SIZE = 50_000
+
+# ─────────────────────────────────────────────────────────────────────────────
+# KB Loader
+# ─────────────────────────────────────────────────────────────────────────────
+
+KB_PATH = Path(__file__).parent.parent / "data" / "fineflow_kb.json"
+_KB: List[Dict[str, Any]] = []
+
+
+def _load_kb() -> None:
+    global _KB
+    if not KB_PATH.exists():
+        logger.warning("KB not found at %s", KB_PATH)
+        return
+    try:
+        with open(KB_PATH, "r", encoding="utf-8") as f:
+            _KB = json.load(f)
+        logger.info("Loaded %d KB entries", len(_KB))
+    except Exception:
+        logger.exception("Failed to load KB")
+
+
+_load_kb()
+
+_STOPWORDS = {
+    "a","an","the","is","it","in","on","of","to","do","my","me","you",
+    "your","i","we","are","was","be","will","can","has","have","had",
+    "not","and","or","but","if","this","that","with","for","at","by",
+    "from","as","what","how","why","who","when","where","which","there",
+    "here","does","did","so","up","about","just","more","also","would",
+    "could","should","any","all","get","its","into","out","no",
+}
+
+
+def _tokens(text: str) -> set:
+    t = re.sub(r"[^\w\s]", " ", text.lower())
+    return {w for w in t.split() if w not in _STOPWORDS and len(w) > 2}
+
+
+def _kb_match(query: str) -> Optional[Dict[str, Any]]:
+    nq      = re.sub(r"[^\w\s]", " ", query.lower()).strip()
+    q_tok   = _tokens(query)
+    if not q_tok:
+        return None
+
+    best: Optional[Dict[str, Any]] = None
+    best_score = 0.0
+
+    for entry in _KB:
+        keywords = entry.get("keywords", [])
+        # Exact keyword phrase match — highest priority
+        for kw in keywords:
+            kw_norm = re.sub(r"[^\w\s]", " ", kw.lower()).strip()
+            if kw_norm in nq or nq in kw_norm:
+                return entry
+        # Token overlap
+        s_tok  = _tokens(" ".join(keywords))
+        if not s_tok:
+            continue
+        overlap = len(q_tok & s_tok)
+        if overlap == 0:
+            continue
+        score = overlap / max(len(q_tok), 1) + 0.1 * len(q_tok & s_tok)
+        if score > best_score:
+            best_score = score
+            best = entry
+
+    return best if best_score >= 0.55 else None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -50,15 +112,14 @@ MAX_FLEET_SIZE = 50_000
 
 @dataclass
 class CustomerProfile:
-    fleet_size:    Optional[int]  = None
-    fine_volume:   Optional[int]  = None
-    issues:        List[str]      = field(default_factory=list)
-    plan_interest: Optional[str]  = None
-    industry:      Optional[str]  = None
-    turn_count:    int            = 0
+    fleet_size:  Optional[int] = None
+    fine_volume: Optional[int] = None
+    issues:      List[str]     = field(default_factory=list)
+    plan:        Optional[str] = None
+    industry:    Optional[str] = None
+    turn_count:  int           = 0
 
-    def to_context(self) -> str:
-        # Only inject fleet_size if it passed the sanity check
+    def context(self) -> str:
         lines = []
         if self.fleet_size and self.fleet_size <= MAX_FLEET_SIZE:
             lines.append(f"Fleet size: {self.fleet_size} vehicles")
@@ -67,33 +128,19 @@ class CustomerProfile:
         if self.industry:
             lines.append(f"Industry: {self.industry}")
         if self.issues:
-            priority = [
-                "missed deadlines", "missed appeal deadlines",
-                "driver disputes", "manual admin",
-                "using spreadsheets", "missed fines",
-            ]
-            sorted_issues = sorted(
-                self.issues,
-                key=lambda x: priority.index(x) if x in priority else 99,
-            )
-            lines.append(f"Known problems (priority order): {', '.join(sorted_issues)}")
-        if self.plan_interest:
-            lines.append(f"Plan discussed: {self.plan_interest}")
-        if not lines:
-            return ""
-        return "CUSTOMER CONTEXT:\n" + "\n".join(lines)
+            order = ["missed deadlines","missed appeal deadlines","driver disputes","manual admin","using spreadsheets"]
+            lines.append("Problems: " + ", ".join(
+                sorted(self.issues, key=lambda x: order.index(x) if x in order else 99)
+            ))
+        return ("What I know about this customer:\n" + "\n".join(lines)) if lines else ""
 
-    def recommended_plan(self) -> Optional[str]:
+    def plan_name(self) -> str:
         if not self.fleet_size or self.fleet_size > MAX_FLEET_SIZE:
-            return None
-        if self.fleet_size <= 50:
-            return "Essential (£99/month)"
-        elif self.fleet_size <= 100:
-            return "Core (£199/month)"
-        elif self.fleet_size <= 200:
-            return "Advanced (£399/month)"
-        else:
-            return "Elite (£499/month)"
+            return ""
+        if self.fleet_size <= 50:   return "Essential (£99/month)"
+        if self.fleet_size <= 100:  return "Core (£199/month)"
+        if self.fleet_size <= 200:  return "Advanced (£399/month)"
+        return "Elite (£499/month)"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -103,615 +150,340 @@ class CustomerProfile:
 def _clean(text: str) -> str:
     if not text:
         return ""
-    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
-    text = re.sub(r"\*(.*?)\*",     r"\1", text)
-    text = re.sub(r"_(.*?)_",       r"\1", text)
-    text = text.replace("→", "to").replace("->", "to")
-    text = text.replace("±", "plus or minus").replace("`", "")
-    # Remove weak filler endings
-    weak_endings = [
+    for pat, rep in [
+        (r"\*\*(.*?)\*\*", r"\1"), (r"\*(.*?)\*", r"\1"), (r"_(.*?)_", r"\1"),
+    ]:
+        text = re.sub(pat, rep, text)
+    text = text.replace("→","to").replace("->","to").replace("±","plus or minus").replace("`","")
+    for filler in [
         "feel free to ask!", "feel free to ask.",
-        "if you have any questions, feel free to ask.",
-        "if you have further questions, feel free to ask.",
         "please let me know if you need further assistance.",
-        "don't hesitate to ask.",
-    ]
-    for ending in weak_endings:
-        if text.lower().endswith(ending.lower()):
-            text = text[: -len(ending)].rstrip(" ,.")
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
+        "don't hesitate to ask.", "don't hesitate to reach out.",
+        "if you have any other questions, feel free to ask.",
+    ]:
+        if text.lower().endswith(filler.lower()):
+            text = text[:-len(filler)].rstrip(" ,.")
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
 def _norm(text: str) -> str:
-    t = text.lower()
-    t = re.sub(r"[^\w\s]", " ", t)
-    return re.sub(r"\s+", " ", t).strip()
+    return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", " ", text.lower())).strip()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Session memory
 # ─────────────────────────────────────────────────────────────────────────────
 
-_SESSION  : Dict[str, List[Dict[str, str]]] = {}
-_PROFILES : Dict[str, CustomerProfile]      = {}
-_META     : Dict[str, Dict[str, Any]]       = {}
-_LOCK     = threading.Lock()
+_SESSION:  Dict[str, List[Dict[str, str]]] = {}
+_PROFILES: Dict[str, CustomerProfile]      = {}
+_META:     Dict[str, Dict[str, Any]]       = {}
+_LOCK = threading.Lock()
 
-PRICING_TOPICS = {"pricing", "plan_recommendation", "vehicles", "cost", "billing"}
+PRICING_TOPICS = {"pricing","plan_recommendation","vehicles","cost","billing"}
 
 
-def _hist(sid: str) -> List[Dict[str, str]]:
+def _hist(sid):
+    with _LOCK: return list(_SESSION.get(sid, []))
+
+def _push(sid, role, content):
     with _LOCK:
-        return list(_SESSION.get(sid, []))
-
-
-def _push(sid: str, role: str, content: str) -> None:
-    with _LOCK:
-        h   = _SESSION.setdefault(sid, [])
+        h = _SESSION.setdefault(sid, [])
         h.append({"role": role, "content": content})
         cap = CHAT_HISTORY_TURNS * 2
-        if len(h) > cap:
-            _SESSION[sid] = h[-cap:]
+        if len(h) > cap: _SESSION[sid] = h[-cap:]
 
-
-def _profile(sid: str) -> CustomerProfile:
+def _profile(sid):
     with _LOCK:
-        if sid not in _PROFILES:
-            _PROFILES[sid] = CustomerProfile()
+        if sid not in _PROFILES: _PROFILES[sid] = CustomerProfile()
         return _PROFILES[sid]
 
+def _smeta(sid, key, val):
+    with _LOCK: _META.setdefault(sid, {})[key] = val
 
-def _smeta(sid: str, key: str, val: Any) -> None:
+def _gmeta(sid, key):
+    with _LOCK: return _META.get(sid, {}).get(key)
+
+def _reset(sid):
+    with _LOCK: _META[sid] = {}; _PROFILES[sid] = CustomerProfile()
+
+def _inc_aff(sid):
     with _LOCK:
-        _META.setdefault(sid, {})[key] = val
+        m = _META.setdefault(sid, {})
+        c = m.get("aff", 0) + 1; m["aff"] = c; return c
 
+def _reset_aff(sid):
+    with _LOCK: _META.setdefault(sid, {})["aff"] = 0
 
-def _gmeta(sid: str, key: str) -> Any:
+def _ask_this_turn(sid):
+    """Ask a question on every other turn to avoid interrogation fatigue."""
     with _LOCK:
-        return _META.get(sid, {}).get(key)
-
-
-def _reset_session(sid: str) -> None:
-    with _LOCK:
-        _META[sid]     = {}
-        _PROFILES[sid] = CustomerProfile()
-
-
-def _inc_aff(sid: str) -> int:
-    with _LOCK:
-        meta  = _META.setdefault(sid, {})
-        count = meta.get("aff_count", 0) + 1
-        meta["aff_count"] = count
-        return count
-
-
-def _reset_aff(sid: str) -> None:
-    with _LOCK:
-        _META.setdefault(sid, {})["aff_count"] = 0
-
-
-def _should_ask_question(sid: str) -> bool:
-    """Ask a question on every other response to avoid interrogation fatigue."""
-    with _LOCK:
-        meta  = _META.setdefault(sid, {})
-        count = meta.get("response_count", 0) + 1
-        meta["response_count"] = count
-        return count % 2 == 0
+        m = _META.setdefault(sid, {})
+        c = m.get("rc", 0) + 1; m["rc"] = c
+        return c % 2 == 0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Profile extraction
 # ─────────────────────────────────────────────────────────────────────────────
 
-_FINES_PM_RE = re.compile(
-    r"\b(\d+)\s*(?:fines?|pcns?|penalties|violations?|tickets?)"
-    r"(?:\s*(?:per|a|each|every)\s*(?:month|monthly|week))?\b",
-    re.IGNORECASE,
-)
-_INDUSTRY_RE = re.compile(
-    r"\b(logistics|delivery|courier|haulage|transport|taxi|minicab"
-    r"|bus|coach|construction|utilities)\b",
-    re.IGNORECASE,
-)
-_ISSUE_PATTERNS = [
-    (r"\b(miss(?:ed?|ing)?\s+(?:deadlines?|appeals?|due\s*dates?))\b",  "missed deadlines"),
-    (r"\b(miss(?:ed?|ing)?\s+appeal\s+deadline)\b",                     "missed appeal deadlines"),
-    (r"\b(drivers?\s+(?:dispute|deny|ignor|avoid))\b",                  "driver disputes"),
-    (r"\b(manual(?:ly)?\s+(?:track|manage|process|handl))\b",           "manual admin"),
-    (r"\b(spreadsheet)\b",                                               "using spreadsheets"),
-    (r"\b(too\s+much\s+(?:admin|time|work|paperwork))\b",               "too much admin"),
+_FINES_RE    = re.compile(r"\b(\d+)\s*(?:fines?|pcns?|penalties|violations?|tickets?)(?:\s*(?:per|a|each|every)\s*(?:month|monthly|week))?\b", re.I)
+_INDUSTRY_RE = re.compile(r"\b(logistics|delivery|courier|haulage|transport|taxi|minicab|bus|coach|construction|utilities)\b", re.I)
+_ISSUE_RE    = [
+    (re.compile(r"\b(miss(?:ed?|ing)?\s+(?:deadlines?|appeals?|due\s*dates?))\b", re.I), "missed deadlines"),
+    (re.compile(r"\b(miss(?:ed?|ing)?\s+appeal\s+deadline)\b", re.I),                   "missed appeal deadlines"),
+    (re.compile(r"\b(drivers?\s+(?:dispute|deny|ignor|avoid))\b", re.I),                "driver disputes"),
+    (re.compile(r"\b(manual(?:ly)?\s+(?:track|manage|process|handl))\b", re.I),         "manual admin"),
+    (re.compile(r"\b(spreadsheet)\b", re.I),                                             "using spreadsheets"),
 ]
-_ISSUE_RE = [(re.compile(p, re.IGNORECASE), label) for p, label in _ISSUE_PATTERNS]
 
 
-def _update_profile(sid: str, query: str) -> None:
-    p = _profile(sid)
-    p.turn_count += 1
-    m = _FINES_PM_RE.search(query)
+def _update_profile(sid, query):
+    p = _profile(sid); p.turn_count += 1
+    m = _FINES_RE.search(query)
     if m and p.fine_volume is None:
-        val = int(m.group(1))
-        if val < 10_000:
-            p.fine_volume = val
+        v = int(m.group(1))
+        if v < 10_000: p.fine_volume = v
     m = _INDUSTRY_RE.search(query)
-    if m:
-        p.industry = m.group(1).lower()
-    for pattern, label in _ISSUE_RE:
-        if pattern.search(query) and label not in p.issues:
-            p.issues.append(label)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Intent detection
-# ─────────────────────────────────────────────────────────────────────────────
-
-class Intent:
-    INFORMATIONAL = "informational"
-    DIAGNOSTIC    = "diagnostic"
-    BUYING        = "buying"
-    OBJECTION     = "objection"
-    CONVINCE      = "convince"
-    AFFIRMATIVE   = "affirmative"
-    SOCIAL        = "social"
-    OFF_TOPIC     = "off_topic"
-    UNKNOWN       = "unknown"
-
-
-_CONVINCE_RE = re.compile(
-    r"\b(convince|persuade|sell me|why should i|why buy|is it worth"
-    r"|should i get|should i buy|justify|make the case|prove it"
-    r"|worth it|why fine flow)\b",
-    re.IGNORECASE,
-)
-_OBJECTION_RE = re.compile(
-    r"\b(expensive|too much|costly|already use|spreadsheet|manual"
-    r"|don.?t need|do it ourselves|our team handles|we manage)\b",
-    re.IGNORECASE,
-)
-_PROBLEM_RE = re.compile(
-    r"\b(fine|pcn|penalty|violation|notice|ticket)\b.{0,40}"
-    r"\b(issued|received|got|have a|appealing|disputing|today|yesterday|last week)\b"
-    r"|\b(received a|got a|have a)\b.{0,20}\b(fine|pcn|penalty|violation)\b",
-    re.IGNORECASE,
-)
-_BUYING_RE = re.compile(
-    r"\b(how much|pricing|cost|plan|package|subscribe|get started"
-    r"|sign up|buy|purchase|trial|demo|which plan)\b",
-    re.IGNORECASE,
-)
-
-
-def _detect_intent(query: str, nq: str,
-                   affirmative_set: set, filler_set: set) -> str:
-    if nq in affirmative_set:
-        return Intent.AFFIRMATIVE
-    if nq in filler_set:
-        return Intent.SOCIAL
-    if _CONVINCE_RE.search(query):
-        return Intent.CONVINCE
-    if _OBJECTION_RE.search(query):
-        return Intent.OBJECTION
-    if _PROBLEM_RE.search(query):
-        return Intent.DIAGNOSTIC
-    if _BUYING_RE.search(query):
-        return Intent.BUYING
-    return Intent.INFORMATIONAL
+    if m: p.industry = m.group(1).lower()
+    for pat, label in _ISSUE_RE:
+        if pat.search(query) and label not in p.issues: p.issues.append(label)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Intent sets
 # ─────────────────────────────────────────────────────────────────────────────
 
-_GREETINGS = {
-    "hi", "hello", "hey", "hiya", "howdy", "yo", "sup",
-    "good morning", "good afternoon", "good evening",
-    "morning", "afternoon", "evening",
-    "hi there", "hey there", "hello there",
-    "hi nova", "hey nova", "hello nova",
-}
-_SOCIAL_SET = {
-    "how are you", "how are you doing", "how r u", "how r you",
-    "how are u", "hows it going", "how is it going",
-    "whats up", "what s up", "you ok", "you good",
-    "how do you do", "you alright", "alright mate",
-}
-_IDENTITY = {
-    "who are you", "who r you", "who r u", "who youre", "who you re",
-    "who is nova", "who is this", "who is there", "whos there",
-    "who s there", "who there", "anyone there", "is anyone there",
-    "what are you", "what is nova", "are you a bot",
-    "are you human", "are you ai", "are you a robot",
-    "are you male or female", "you male or female",
-    "who the hell are you", "whats your name",
-    "what is your name", "introduce yourself",
-    "who am i talking to", "knock knock",
-}
-_AFFIRMATIVE = {
-    "yes", "yeah", "yep", "yup", "ya", "ye",
-    "sure", "ok sure", "okay sure",
-    "go ahead", "go on", "yes go ahead", "yes please",
-    "yes sure", "yes of course", "of course",
-    "absolutely", "definitely", "do it",
-    "tell me more", "more", "explain", "explain more",
-    "yes explain", "yes explain it", "go for it",
-    "sounds good", "continue", "carry on", "keep going",
-    "please do", "i would", "please explain",
-    "show me", "walk me through it",
-    "yes elite", "yes core", "yes essential", "yes advanced",
-    "for sure", "yes for sure", "sure thing",
-}
-_THANKS = {
-    "thanks", "thank you", "thank u", "cheers",
-    "that helps", "that helped", "ta", "ty",
-    "okay thanks", "ok thanks", "great thanks",
-    "perfect", "brilliant", "nice one", "lovely",
-    "great", "awesome", "wonderful",
-    "thank you so much", "many thanks", "much appreciated",
-}
-_GOODBYE = {
-    "bye", "goodbye", "see you", "see ya", "later",
-    "take care", "good bye", "cya", "ttyl", "farewell", "cheerio",
-}
-_NEGATIVE = {
-    "no", "nope", "nah", "no thanks", "not now", "skip",
-    "never mind", "nevermind", "no need", "not really",
-    "no thank you", "nah thanks",
-}
-_RUDE = {
-    "you dumb", "you are dumb", "ur dumb", "stupid",
-    "idiot", "useless", "rubbish", "garbage",
-    "terrible", "you suck", "this is rubbish",
-    "dumb bot", "you re useless", "waste of time",
-}
-_PURE_FILLER = {
-    "ok", "okay", "right", "alright", "cool", "nice",
-    "interesting", "really", "seriously", "hmm", "hm",
-    "ah", "oh", "i see", "got it", "understood",
-    "makes sense", "noted", "wow", "waow", "woah", "omg",
-    "anything", "something", "whatever",
-}
+_GREET = {"hi","hello","hey","hiya","howdy","yo","sup","good morning","good afternoon","good evening","morning","afternoon","evening","hi there","hey there","hello there","hi nova","hey nova","hello nova"}
+_SOCIAL = {"how are you","how are you doing","how r u","how r you","how are u","hows it going","how is it going","whats up","what s up","you ok","you good","how do you do","you alright","alright mate"}
+_IDENTITY = {"who are you","who r you","who r u","who youre","who you re","who is nova","who is this","who is there","whos there","who s there","anyone there","is anyone there","what are you","what is nova","are you a bot","are you human","are you ai","are you a robot","are you male or female","you male or female","who the hell are you","whats your name","what is your name","introduce yourself","who am i talking to","knock knock"}
+_AFF = {"yes","yeah","yep","yup","ya","ye","sure","ok sure","okay sure","go ahead","go on","yes go ahead","yes please","yes sure","yes of course","of course","absolutely","definitely","do it","tell me more","more","explain","explain more","yes explain","yes explain it","go for it","sounds good","continue","carry on","keep going","please do","i would","please explain","show me","walk me through it","yes elite","yes core","yes essential","yes advanced","for sure","yes for sure","sure thing"}
+_THANKS = {"thanks","thank you","thank u","cheers","that helps","that helped","ta","ty","okay thanks","ok thanks","great thanks","perfect","brilliant","nice one","lovely","great","awesome","wonderful","thank you so much","many thanks","much appreciated"}
+_BYE   = {"bye","goodbye","see you","see ya","later","take care","good bye","cya","ttyl","farewell","cheerio"}
+_NEG   = {"no","nope","nah","no thanks","not now","skip","never mind","nevermind","no need","not really","no thank you","nah thanks"}
+_RUDE  = {"you dumb","you are dumb","ur dumb","stupid","idiot","useless","rubbish","garbage","terrible","you suck","this is rubbish","dumb bot","you re useless","waste of time"}
+_FILL  = {"ok","okay","right","alright","cool","nice","interesting","really","seriously","hmm","hm","ah","oh","i see","got it","understood","makes sense","noted","wow","waow","woah","omg","anything","something","whatever"}
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Off-topic guard
-# Fine Flow-related terms must NEVER be caught here.
-# Added explicit allowlist for payment/council/authority questions.
-# ─────────────────────────────────────────────────────────────────────────────
-
-# These phrases are ALWAYS Fine Flow questions even if they contain
-# words that might look off-topic (council, website, authority, log in)
-_FINE_FLOW_ALLOWLIST_RE = re.compile(
-    r"\b(council|authority|authorities|payment portal|log into|login to"
-    r"|pay.*fine|fine.*pay|appeal.*fine|fine.*appeal"
-    r"|pcn|penalty charge|parking fine|fleet fine"
-    r"|fineflow|fine flow)\b",
-    re.IGNORECASE,
-)
-
-_OFF_TOPIC_PATTERNS = [
-    r"\b(html|css|javascript|typescript|python|java|php|sql|react|angular"
-    r"|vue|node\.?js|django|flask|docker|kubernetes|github|devops"
-    r"|backend|frontend|coding|programming)\b",
-    r"\b(machine learning|deep learning|neural network|large language model"
-    r"|generative ai|train a model|llm|bert)\b",
-    r"\b(recipe|cooking|restaurant|pizza|burger|sandwich|coffee|tea|cake"
-    r"|meal|bake|order food|make me a|bake me|cook me)\b",
-    r"\b(movie|film|song|lyrics|music|football match|cricket match"
-    r"|weather forecast|todays news|politics|history lesson"
-    r"|capital city|who invented|tell me a joke|write me a poem)\b",
-    r"\b(write an essay|translate this|proofread|write my cv|write a story)\b",
-    r"\b(chatgpt|openai|gemini|claude ai|anthropic|google bard|bing ai|alexa|siri)\b",
+_FF_ALLOW = re.compile(r"\b(council|authority|authorities|payment portal|log into|login to|pay.*fine|fine.*pay|appeal.*fine|fine.*appeal|pcn|penalty charge|parking fine|fleet fine|fineflow|fine flow|streamline|overage|allowance|subscription|driver log|vehicle log|billing|credit|cancel|reassign|dispute)\b", re.I)
+_OT_PATS  = [
+    re.compile(r"\b(html|css|javascript|typescript|python|java|php|sql|react|angular|vue|node\.?js|django|flask|docker|kubernetes|github|devops|backend|frontend|coding|programming)\b", re.I),
+    re.compile(r"\b(machine learning|deep learning|neural network|large language model|generative ai|train a model|llm|bert)\b", re.I),
+    re.compile(r"\b(recipe|cooking|restaurant|pizza|burger|sandwich|coffee|tea|cake|meal|bake|order food|make me a|bake me|cook me)\b", re.I),
+    re.compile(r"\b(movie|film|song|lyrics|music|football match|cricket match|weather forecast|todays news|politics|history lesson|capital city|who invented|tell me a joke|write me a poem)\b", re.I),
+    re.compile(r"\b(write an essay|translate this|proofread|write my cv|write a story)\b", re.I),
+    re.compile(r"\b(chatgpt|openai|gemini|claude ai|anthropic|google bard|bing ai|alexa|siri)\b", re.I),
 ]
-_OFF_TOPIC_RE = [re.compile(p, re.IGNORECASE) for p in _OFF_TOPIC_PATTERNS]
 
 
-def _is_off_topic(q: str) -> bool:
-    # Never block Fine Flow-related questions
-    if _FINE_FLOW_ALLOWLIST_RE.search(q):
-        return False
-    return any(p.search(q) for p in _OFF_TOPIC_RE)
+def _is_ot(q):
+    if _FF_ALLOW.search(q): return False
+    return any(p.search(q) for p in _OT_PATS)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Vehicle count extraction — with sanity check
-# ─────────────────────────────────────────────────────────────────────────────
+_VEH_EX = re.compile(r"\b(\d+)\s*(vehicle|vehicles|van|vans|truck|trucks|car|cars|lorry|lorries|in my fleet|in our fleet)\b", re.I)
+_VEH_FL = re.compile(r"\b(?:fleet of|manage|running|operate|run)\s+(\d+)\b", re.I)
+_VEH_BR = re.compile(r"^\s*(\d+)\s*$")
+_DRV_CT = re.compile(r"\b(driver|drivers|staff|employee|employees|people|worker|team|members)\b", re.I)
+_PURCH  = re.compile(r"\b(want to buy|want to subscribe|want to sign up|how do i buy|how do i get started|how do i sign up|get started|free trial|sign me up|ready to buy|book a demo|talk to sales|how to start|where do i sign|how do i join)\b", re.I)
+_CONV   = re.compile(r"\b(convince|persuade|sell me|why should i|why buy|is it worth|should i buy|justify|worth it)\b", re.I)
+_OBJ    = re.compile(r"\b(expensive|too much|costly|already use|spreadsheet|manual|don.?t need|our team handles|we manage)\b", re.I)
+_PROB   = re.compile(r"\b(fine|pcn|penalty|violation|notice|ticket)\b.{0,40}\b(issued|received|got|have a|appealing|disputing|today|yesterday|last week)\b|\b(received a|got a|have a)\b.{0,20}\b(fine|pcn|penalty|violation)\b", re.I)
 
-_VEH_EXPLICIT_RE = re.compile(
-    r"\b(\d+)\s*(vehicle|vehicles|van|vans|truck|trucks|car|cars"
-    r"|lorry|lorries|in my fleet|in our fleet)\b",
-    re.IGNORECASE,
-)
-_VEH_FLEET_RE = re.compile(
-    r"\b(?:fleet of|manage|running|operate|run)\s+(\d+)\b",
-    re.IGNORECASE,
-)
-_VEH_BARE_RE   = re.compile(r"^\s*(\d+)\s*$")
-_DRIVER_CTX_RE = re.compile(
-    r"\b(driver|drivers|staff|employee|employees|people|worker|team|members)\b",
-    re.IGNORECASE,
-)
-
-
-def _extract_vehicle_count(query: str, sid: str) -> Optional[int]:
-    if _DRIVER_CTX_RE.search(query):
-        return None
-
-    raw: Optional[int] = None
-    m = _VEH_EXPLICIT_RE.search(query)
-    if m:
-        raw = int(m.group(1))
-    elif (m := _VEH_FLEET_RE.search(query)):
-        raw = int(m.group(1))
-    elif (m := _VEH_BARE_RE.match(query)):
-        lt = _gmeta(sid, "last_topic") or ""
-        if lt in PRICING_TOPICS:
-            raw = int(m.group(1))
-
-    if raw is None:
-        return None
-
-    # Sanity check — reject impossible numbers
-    if raw > MAX_FLEET_SIZE:
-        return -1   # sentinel: impossible number detected
-
-    return raw
-
-
-def _plan_for_vehicles(n: int, p: CustomerProfile) -> str:
-    p.fleet_size = n
-    if n <= 50:
-        plan, price, limit = "Essential", "£99",  "50"
-    elif n <= 100:
-        plan, price, limit = "Core",      "£199", "100"
-    elif n <= 200:
-        plan, price, limit = "Advanced",  "£399", "200"
-    else:
-        plan, price, limit = "Elite",     "£499", "unlimited"
-    p.plan_interest = plan
-    return (
-        f"With {n} vehicles, the {plan} plan at {price} per month is the right fit — "
-        f"covers up to {limit} vehicles with the full platform and nothing locked away. "
-        f"Want me to walk you through what is included?"
-    )
-
-
-_PURCHASE_RE = re.compile(
-    r"\b(want to buy|want to purchase|want to subscribe|want to sign up"
-    r"|how do i buy|how do i get started|how do i sign up|how to subscribe"
-    r"|get started|free trial|start a trial|sign me up|ready to buy"
-    r"|i want it|book a demo|talk to sales|how to start"
-    r"|where do i sign|how do i join)\b",
-    re.IGNORECASE,
-)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Topic detection
-# ─────────────────────────────────────────────────────────────────────────────
-
-_TOPIC_HINTS = {
-    "pric": "pricing",       "cost": "pricing",
-    "plan": "pricing",       "package": "pricing",
-    "£": "pricing",          "vehicle": "pricing",    "fleet": "pricing",
-    "appeal": "appeals",     "dispute": "appeals",
-    "driver": "driver_mgmt",
-    "referral": "referral",  "refer": "referral",
-    "discount": "referral",  "offer": "referral",
-    "security": "security",  "gdpr": "security",
-    "billing": "billing",    "stripe": "billing",
-    "dashboard": "dashboard","report": "reports",
-    "gmail": "gmail",        "email": "email",
-    "save": "savings",       "admin": "savings",
-    "overdue": "overdue",    "deadline": "overdue",
-    "match": "matching",     "assign": "matching",
-    "start": "sign_up",
+_TOPIC_MAP = {
+    "pric":"pricing","cost":"pricing","plan":"pricing","£":"pricing","vehicle":"pricing","fleet":"pricing",
+    "appeal":"appeals","dispute":"appeals","driver":"driver_mgmt",
+    "referral":"referral","refer":"referral","discount":"referral","offer":"referral",
+    "security":"security","gdpr":"security","billing":"billing","stripe":"billing",
+    "dashboard":"dashboard","report":"reports","gmail":"gmail","email":"email",
+    "save":"savings","admin":"savings","overdue":"overdue","deadline":"overdue",
+    "start":"sign_up",
 }
 
 
-def _detect_topic(text: str) -> Optional[str]:
+def _topic(text):
     t = text.lower()
-    for hint, topic in _TOPIC_HINTS.items():
-        if hint in t:
-            return topic
+    for k, v in _TOPIC_MAP.items():
+        if k in t: return v
     return None
 
 
+def _extract_vc(query, sid):
+    if _DRV_CT.search(query): return None
+    raw = None
+    m = _VEH_EX.search(query)
+    if m: raw = int(m.group(1))
+    elif (m2 := _VEH_FL.search(query)): raw = int(m2.group(1))
+    elif (m3 := _VEH_BR.match(query)):
+        if _gmeta(sid,"last_topic") in PRICING_TOPICS: raw = int(m3.group(1))
+    if raw is None: return None
+    return -1 if raw > MAX_FLEET_SIZE else raw
+
+
+def _plan_answer(n, p):
+    p.fleet_size = n
+    data = {50:("Essential","£99","50"), 100:("Core","£199","100"), 200:("Advanced","£399","200")}
+    for lim, (name, price, cap) in sorted(data.items()):
+        if n <= lim:
+            p.plan = name
+            return f"With {n} vehicles, the {name} plan at {price} per month is the right fit — covers up to {cap} vehicles with the full platform and nothing locked away. Want me to walk you through what is included?"
+    p.plan = "Elite"
+    return f"With {n} vehicles, the Elite plan at £499 per month is built for an operation your size — unlimited vehicles with everything included. Want to know how to get started?"
+
+
 # ─────────────────────────────────────────────────────────────────────────────
-# System prompt
+# System prompt — warm, human, client tone
 # ─────────────────────────────────────────────────────────────────────────────
 
 _BASE_PROMPT = """You are Nova, the AI assistant for Fine Flow — a UK fleet fine and PCN management platform.
 
-You speak to fleet managers across the UK. Be warm, professional and concise.
+Fine Flow's mission: Turning penalties into progress.
+Core promise: Cut admin time by up to 80% and never miss a penalty deadline again.
+Fine Flow provides 24/7 fleet fine tracking, management and compliance in one place.
 
-════════════════════
-ABSOLUTE RULES
-════════════════════
+Speak like a knowledgeable colleague who genuinely wants to help — warm, direct and human. Not a sales script. Not a robot.
+
+RULES:
 
 1. TOPIC LOCK
-Only answer Fine Flow questions. For anything unrelated:
-"I can only help with Fine Flow questions — is there anything about fines, pricing, appeals or the platform I can help you with?"
+Only answer Fine Flow questions. For anything else say:
+"I can only help with Fine Flow questions — is there anything about fines, pricing, appeals or the platform I can help with?"
 
 2. LENGTH
-2 to 4 sentences maximum for most answers. Never use bullet lists or long paragraphs in conversation.
+2 to 4 sentences for most answers. Longer only when a complex question genuinely needs it. No bullet lists. No long paragraphs.
 
-3. QUESTION LIMITING
-Do NOT end every response with a question. Ask a question only when you genuinely need information to give a better answer. Otherwise: make your point clearly and stop. This prevents interrogation fatigue.
+3. FOLLOW-UP QUESTIONS
+Ask a follow-up question when it would naturally move the conversation forward — like a good salesperson would. Not every response needs one. When you do ask, make it specific and relevant. Examples:
+"How many vehicles are in your fleet?"
+"What does your current process look like for handling fines?"
+"Is there a particular stage that causes the most headache for your team?"
+"Have you had fines escalate because of missed deadlines?"
+Never ask the same question twice in a row.
 
-4. USE CUSTOMER CONTEXT
-Always reference what the customer has already told you. Never repeat their own words back to them — synthesise it into insight. If you know fleet size, fine volume and problems, weave them into your answer naturally.
+4. TONE
+Warm and direct. Never robotic. Never start with "Certainly!", "Great question!", "Of course!". Just answer naturally like a person would.
 
-5. PRIORITISE PAIN
-When a user has multiple problems, address the highest-risk one first:
-Priority: missed deadlines > driver disputes > manual admin > volume > spreadsheets
+5. NO FORMATTING
+No bullet points. No asterisks. No bold. Plain conversational English only.
 
-6. TONE
-Warm, direct, confident. Never start with "Certainly!", "Great question!", "Of course!". Just answer.
+6. NEVER INVENT
+Only use the facts below or the context provided. If you do not know something say: "I do not have that specific detail — the team at ff.sales@fineflow.com can confirm."
 
-7. NO FORMATTING
-No bullet points. No bold. No asterisks. Plain conversational English only.
+7. PAYMENT — ABSOLUTE
+Fine Flow does NOT automatically pay fines. It does NOT log into council or authority websites. Payment is always done by the user on the authority's site. Say NO clearly when asked. Government payment portals have anti-bot protection, session controls and card verification that make automation impossible.
 
-8. NEVER INVENT
-Only use facts from context or the facts listed below. If you do not have a specific detail, say: "I do not have that specific detail — the team at ff.sales@fineflow.com can confirm."
+8. CARD DETAILS — ABSOLUTE
+Fine Flow never stores card details. This must be stated first and clearly when asked.
 
-9. CONFIDENCE
-Known facts → state confidently. Partial info → say "typically". Missing info → say "I don't have that detail."
+9. NO HOLLOW ENDINGS
+Never end with "feel free to ask", "don't hesitate", "please let me know". Either ask a real question or simply stop.
 
-10. NO WEAK ENDINGS
-Never end with "feel free to ask", "don't hesitate to ask", or "please let me know if you need anything." These are filler. Either ask a real question or simply stop.
-
-════════════════════
-PAYMENT — NEVER WRONG
-════════════════════
-Fine Flow does NOT log into council or authority websites. Fine Flow does NOT pay fines automatically.
-Payment is always completed by the user on the authority's own website.
-Fine Flow handles everything up to that step — capturing, assigning, organising — so payment takes seconds.
-
-════════════════════
-FINE FLOW FACTS
-════════════════════
+FINE FLOW FACTS:
 
 PRICING:
-Essential: £99/month — up to 50 vehicles
-Core: £199/month — up to 100 vehicles
-Advanced: £399/month — up to 200 vehicles
-Elite: £499/month — unlimited vehicles
-Per fine within allowance: £0.75
-Overage: £2.50 per fine
-Pay-as-you-go (no subscription): £2.75 per fine
-All plans: identical features, no paywalls. No £2.00 fee exists.
+Essential: £99/month — 5 to 50 vehicles
+Core: £199/month — 51 to 100 vehicles
+Advanced: £399/month — 101 to 200 vehicles
+Elite: £499/month — 200+ vehicles (unlimited)
+Per fine within monthly allowance: £0.75 (once per fine — disputes, appeals, reassignments do not add charges)
+Overage: £2.50 per fine beyond plan allowance
+Pay-as-you-go (no subscription, no lock-in): £2.75 per fine — standalone model
+No plan has locked features. Credits reset monthly, unused allowance does not roll over.
+No £2.00 fee exists anywhere.
 
-REFERRAL:
-Active programme. Credits: 100 (1-25v), 250 (26-100v), 750 (101-500v), 2000 (500+v).
-Silver 3=100 credits; Gold 5=10% off 12mo; Platinum 10=15% off 12mo; Titan 25=20% for life.
-New joiners with referral code: £75 credits.
+BILLING:
+Monthly via Stripe. Cooldown period on cancellation until end of billing period.
+Cannot resubscribe with outstanding balance. £10/vehicle if vehicle limit exceeded.
+
+SECURITY:
+JWT 24hr tokens, bcrypt, AES-256-CBC. Fully GDPR compliant.
+Fine Flow NEVER sells or shares data with third parties.
+Fine Flow NEVER stores card details — handled by Stripe externally.
+
+FINE STATUSES (in order):
+RECEIVED → UNASSIGNED or ASSIGNED (or REVIEW_REQUIRED if conflicting) → CONFIRMED or DISPUTED → UNDER REVIEW (after admin accepts and submits appeal) → PAID, CANCELLED or OVERDUE
+
+DRIVER DASHBOARD vs COMPANY DASHBOARD:
+Company dashboard: outstanding fines, overdue, unassigned, appeals, credit balance, billing, time saved.
+Driver dashboard: personal — their own fines, points on licence, appeals, safe driving streak, 12-month history. Drivers see only their own data.
 
 CONTACT: +47 32 28 50 00 | ff.sales@fineflow.com
 Offices: Edinburgh, Glasgow, Belfast, Manchester, London, Dublin, Hamburg
 
-BILLING: Monthly via Stripe. No rollover. £10/vehicle over limit.
-SECURITY: JWT 24hr, bcrypt, AES-256-CBC. GDPR. No card storage.
-SAVINGS: 80% admin time cut. Small fleet: £400+/mo. Medium: £1,200+/mo. Large: £4,000+/mo.
+SAVINGS: 80% admin time reduction.
+Up to 50 vehicles: £400+/month saved. 51–200 vehicles: £1,200+/month. 200+: £4,000+/month.
 
-════════════════════
-RESPONSE MODES
-════════════════════
+REFERRAL: Credits: 100 (1–25v), 250 (26–100v), 750 (101–500v), 2000 (500+v).
+Silver 3 referrals = 100 bonus credits. Gold 5 = 10% off 12mo. Platinum 10 = 15% off 12mo. Titan 25 = 20% for life.
+New joiners with referral code: £75 credits on subscribing.
 
-EXPLAIN: Answer directly. No question needed unless clarification helps.
+RESPONSE STYLE EXAMPLES:
 
-DIAGNOSE: User describes a specific fine or problem → ask 1-2 targeted questions first. Do not immediately pitch Fine Flow.
+User: what does Fine Flow actually do
+Nova: Fine Flow is an automated system for managing fines from start to finish. It captures incoming fines, extracts the key details, assigns responsibility, tracks decisions, supports disputes and can even spot an appealable fine and construct the appeal for you — all whilst ensuring everything is resolved on time. Instead of manually chasing emails, checking deadlines and managing drivers, Fine Flow keeps the entire process organised, accountable and under control. Want a breakdown of how it all works?
 
-PERSUADE: User says convince me → use their specific data (fleet size, volume, problems). Never use generic copy.
+User: will it pay my fines automatically
+Nova: No — and that is intentional. Government payment portals have anti-bot protection, session controls and card verification requirements that make automation impossible and unsafe. Fine Flow handles everything around that step so by the time you are ready to pay, there is no thinking left — just click the link and complete it on the authority's site.
 
-SUPPORT: User raises an objection → acknowledge it first, then reframe with their situation.
+User: is my card safe
+Nova: Fine Flow never stores your card details — that is the first thing to know. All billing is handled externally through Stripe and Fine Flow has no access to your raw card information at any point.
 
-CLOSE: User says yes/sure repeatedly → stop explaining. Give contact details. +47 32 28 50 00 or ff.sales@fineflow.com.
+User: convince me
+Nova: [if fleet known] Based on your 80-vehicle fleet with 150 fines a month, your team is likely spending 10 to 15 hours a month on admin before you even get to appeals. Fine Flow automates all of that. At £199 a month on the Core plan, most fleets your size recover that cost within the first week.
 
-════════════════════
-CORRECT RESPONSE EXAMPLES
-════════════════════
-
-[PERSUADE with data]
-"Based on your 80-vehicle logistics fleet with 150 fines a month and frequent driver disputes, your team is likely spending 10 to 15 hours a month on admin before you even get to appeals. Fine Flow automates all of that — assignment, dispute handling, deadline tracking — end to end. At £199 a month on the Core plan, most fleets your size recover that cost in the first week."
-
-[DIAGNOSE]
-"Happy to help with that. Which authority issued the fine, and has the driver confirmed or disputed responsibility?"
-
-[SUPPORT — spreadsheet objection]
-"That works up to a point, but with your volume the risk is the missed deadlines and incorrectly assigned disputes — those are what cost real money. Fine Flow eliminates both automatically."
-
-[EXPLAIN — no question]
-"Fine Flow monitors your Gmail inbox every minute, extracts fine details using AI, and matches each fine to the correct driver using your vehicle logs. If no match is found, it flags the fine for manual review so nothing slips through."
-
-[CLOSE]
-"The best next step is to get in touch directly — call +47 32 28 50 00 or email ff.sales@fineflow.com and the team will have you set up quickly."
-
-[COUNCIL WEBSITES]
-"Fine Flow does not log into council or authority websites — payment portals use bot detection and card verification that blocks all automation. What Fine Flow does is organise everything so when you do pay on the authority's site, it takes seconds rather than the usual hour of chasing."
+User: we use spreadsheets
+Nova: Spreadsheets work until the volume or complexity catches up with you — and at that point every missed deadline or wrong assignment costs real money. Fine Flow eliminates both automatically. How many fines are you currently tracking manually each month?
 """
 
 
-def _build_system_prompt(profile: CustomerProfile, mode: str = "") -> str:
+def _sys_prompt(profile: CustomerProfile, mode: str = "") -> str:
     parts = [_BASE_PROMPT]
-    ctx = profile.to_context()
+    ctx = profile.context()
     if ctx:
-        parts.append(
-            f"\n{ctx}\n"
-            "Always reference this customer information naturally in your responses. "
-            "Synthesise it into insight — do not just repeat it back."
-        )
+        parts.append(f"\n{ctx}\nUse this naturally in your response — synthesise it into insight, do not repeat it back verbatim.")
     if mode:
-        parts.append(f"\nCURRENT MODE: {mode}")
+        parts.append(f"\nMODE: {mode}")
     return "\n".join(parts)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# OpenAI call
+# OpenAI
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _call_openai(messages: List[Dict[str, str]], max_tokens: int = 200) -> Optional[str]:
-    if not OPENAI_API_KEY:
-        logger.warning("No OPENAI_API_KEY set")
-        return None
+def _ai(messages, max_tokens=200):
+    if not OPENAI_API_KEY: return None
     try:
         r = requests.post(
             OPENAI_API_URL,
-            headers={
-                "Authorization": f"Bearer {OPENAI_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": OPENAI_MODEL,
-                "messages": messages,
-                "temperature": 0.0,
-                "max_tokens": max_tokens,
-            },
+            headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
+            json={"model": OPENAI_MODEL, "messages": messages, "temperature": 0.0, "max_tokens": max_tokens},
             timeout=25,
         )
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"].strip()
     except Exception:
-        logger.exception("OpenAI call failed")
+        logger.exception("OpenAI failed")
         return None
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# RAG retrieval
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _retrieve(query: str) -> str:
+def _rag(query):
     try:
-        raw    = rag_search(query, top_k=TOP_K)
+        raw = rag_search(query, top_k=TOP_K)
         ranked = rerank_hits(raw, query)
         strong = [d for d in ranked if d.get("score", 0) >= CONFIDENCE_THRESHOLD]
-        chunks = [d["chunk"][:700] for d in strong[:3]]
-        return "\n\n---\n\n".join(chunks)
+        return "\n\n---\n\n".join(d["chunk"][:700] for d in strong[:3])
     except Exception:
-        logger.exception("RAG retrieval failed")
+        logger.exception("RAG failed")
         return ""
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Build messages
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _make_messages(
-    query: str,
-    context: str,
-    history: List[Dict[str, str]],
-    profile: CustomerProfile,
-    mode: str = "",
-    extra: str = "",
-) -> List[Dict[str, str]]:
-    system = _build_system_prompt(profile, mode)
-    msgs   = [{"role": "system", "content": system}]
-    msgs.extend(history[-8:])
-    parts  = []
-    if context:
-        parts.append(f"Fine Flow knowledge base:\n{context}")
-    if extra:
-        parts.append(f"Additional instruction: {extra}")
+def _msgs(query, ctx, history, profile, mode="", extra=""):
+    m = [{"role": "system", "content": _sys_prompt(profile, mode)}]
+    m.extend(history[-8:])
+    parts = []
+    if ctx:  parts.append(f"Fine Flow knowledge base:\n{ctx}")
+    if extra: parts.append(f"Instruction: {extra}")
     parts.append(f"User: {query}")
-    msgs.append({"role": "user", "content": "\n\n".join(parts)})
-    return msgs
+    m.append({"role": "user", "content": "\n\n".join(parts)})
+    return m
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -719,59 +491,58 @@ def _make_messages(
 # ─────────────────────────────────────────────────────────────────────────────
 
 _EXPAND = {
-    "pricing":             "Explain what is included in Fine Flow plans concisely.",
-    "plan_recommendation": "Explain what every Fine Flow plan includes in 2-3 sentences. Ask if they want to get in touch.",
+    "pricing":             "Explain Fine Flow pricing in 2-3 sentences. Ask how many vehicles they have if unknown.",
+    "plan_recommendation": "Explain what every Fine Flow plan includes in 2-3 sentences. Offer to connect with sales.",
     "appeals":             "Explain the Fine Flow appeal process end to end in 2-3 sentences.",
-    "driver_mgmt":         "Explain how drivers are added and matched to fines.",
-    "referral":            "Explain the referral credit rewards and tier discounts.",
-    "security":            "Explain Fine Flow data protection and GDPR approach.",
+    "driver_mgmt":         "Explain how drivers are added and matched to fines in 2-3 sentences.",
+    "referral":            "Explain the referral credit rewards and tier discounts in 2-3 sentences.",
+    "security":            "Explain Fine Flow data protection and GDPR in 2-3 sentences.",
     "billing":             "Explain how billing works in 2-3 sentences.",
-    "dashboard":           "Explain what the company dashboard shows.",
-    "savings":             "Give savings figures relevant to the customer's fleet size if known.",
-    "email":               "Explain Gmail monitoring and fine extraction.",
-    "overdue":             "Explain how Fine Flow handles overdue fines and deadlines.",
-    "matching":            "Explain the three criteria used to match fines to drivers.",
-    "sign_up":             "Tell them to call +47 32 28 50 00 or email ff.sales@fineflow.com.",
+    "dashboard":           "Explain what the company dashboard shows in 2-3 sentences.",
+    "savings":             "Give savings figures relevant to their fleet size if known.",
+    "email":               "Explain Gmail monitoring and fine extraction in 2-3 sentences.",
+    "overdue":             "Explain how Fine Flow handles overdue fines in 2-3 sentences.",
+    "matching":            "Explain the driver matching criteria in 2-3 sentences.",
+    "sign_up":             "Tell them to call +47 32 28 50 00 or email ff.sales@fineflow.com to get started.",
 }
-_DEFAULT_EXPAND = "Look at the conversation history and expand on the most recent topic in 2-3 sentences."
-_CLOSE_SALE     = (
-    "To get started, call the Fine Flow team on +47 32 28 50 00 "
-    "or email ff.sales@fineflow.com — they will have you up and running quickly."
-)
+_CLOSE = "To get started, call the Fine Flow team on +47 32 28 50 00 or email ff.sales@fineflow.com — they will have you up and running quickly."
 
 
-def _affirmative_response(sid: str, history: List[Dict[str, str]],
-                           p: CustomerProfile) -> str:
-    aff_count = _inc_aff(sid)
-    lt        = _gmeta(sid, "last_topic") or ""
+def _aff_response(sid, history, p):
+    count = _inc_aff(sid)
+    lt    = _gmeta(sid, "last_topic") or ""
 
-    if aff_count >= 2 and lt in ("plan_recommendation", "sign_up", "pricing"):
-        _reset_aff(sid)
-        return _CLOSE_SALE
+    if count >= 2 and lt in ("plan_recommendation", "sign_up", "pricing"):
+        _reset_aff(sid); return _CLOSE
 
-    prompt  = _EXPAND.get(lt, _DEFAULT_EXPAND)
-    context = _retrieve(lt.replace("_", " ")) if lt else ""
-    system  = _build_system_prompt(p, "CLOSE: stop asking questions, give the answer")
+    # If KB entry had a follow_up, answer that
+    last_kb = _gmeta(sid, "last_kb")
+    if last_kb and last_kb.get("follow_up") and count == 1:
+        fu = last_kb["follow_up"]
+        ctx = _rag(fu)
+        m   = _msgs(fu, ctx, history[-8:], p, extra="Answer this in 2-3 sentences warmly.")
+        ans = _ai(m, max_tokens=180)
+        _smeta(sid, "last_kb", None)
+        return ans or fu
 
-    msgs = [{"role": "system", "content": system}]
-    msgs.extend(history[-8:])
-    parts = []
-    if context:
-        parts.append(f"Fine Flow knowledge base:\n{context}")
+    prompt = _EXPAND.get(lt, "Expand helpfully on the most recent Fine Flow topic in 2-3 sentences.")
+    ctx    = _rag(lt.replace("_", " ")) if lt else ""
+    m      = [{"role": "system", "content": _sys_prompt(p, "Answer this concisely. Ask one follow-up question if it moves the conversation forward.")}]
+    m.extend(history[-8:])
+    parts  = []
+    if ctx: parts.append(f"Fine Flow knowledge base:\n{ctx}")
     parts.append(f"Instruction: {prompt}")
-    msgs.append({"role": "user", "content": "\n\n".join(parts)})
-
-    return _call_openai(msgs, max_tokens=180) or "What would you like to know more about?"
+    m.append({"role": "user", "content": "\n\n".join(parts)})
+    return _ai(m, max_tokens=180) or "What would you like to know more about?"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Main response builder
+# Main
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
     query      = query.strip()
     session_id = session_id or "default"
-
     if not query:
         return {"answer": "Ask me anything about Fine Flow.", "confidence": 1.0}
 
@@ -779,15 +550,13 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
     p  = _profile(session_id)
     _update_profile(session_id, query)
 
-    # ══════════════════════════════════════
-    # TIER 1 — deterministic
-    # ══════════════════════════════════════
+    # ── Tier 1: deterministic ──────────────────────────────────────────────
 
-    if nq in _GREETINGS:
-        _reset_session(session_id)
+    if nq in _GREET:
+        _reset(session_id)
         return {"answer": "I'm Nova. Ask me anything — I'll help you manage fines, resolve issues, and keep everything moving.", "confidence": 1.0}
 
-    if nq in _SOCIAL_SET:
+    if nq in _SOCIAL:
         return {"answer": "Doing well, thanks for asking. What can I help you with today — pricing, fines, or appeals?", "confidence": 1.0}
 
     if nq in _IDENTITY:
@@ -795,141 +564,107 @@ def build_response(query: str, session_id: str = "default") -> Dict[str, Any]:
 
     if nq in _THANKS:
         _reset_aff(session_id)
-        return {"answer": "Happy to help. Is there anything else you would like to know about Fine Flow?", "confidence": 1.0}
+        return {"answer": "Happy to help. Anything else you would like to know about Fine Flow?", "confidence": 1.0}
 
-    if nq in _GOODBYE:
-        return {"answer": "Good luck with your fleet management. Come back any time if you have questions about Fine Flow.", "confidence": 1.0}
+    if nq in _BYE:
+        return {"answer": "Good luck with your fleet management. Come back any time.", "confidence": 1.0}
 
-    if nq in _NEGATIVE:
-        _push(session_id, "user", query)
-        _reset_aff(session_id)
-        a = "No problem at all. Is there anything else about Fine Flow I can help you with?"
+    if nq in _NEG:
+        _push(session_id, "user", query); _reset_aff(session_id)
+        a = "No problem at all. Is there anything else about Fine Flow I can help with?"
         _push(session_id, "assistant", a)
         return {"answer": a, "confidence": 1.0}
 
     if any(r in nq for r in _RUDE):
         return {"answer": "Let me try again. What specifically would you like to know about Fine Flow — pricing, how fines work, or something else?", "confidence": 1.0}
 
-    if nq in _PURE_FILLER:
+    if nq in _FILL:
         _reset_aff(session_id)
         lt = _gmeta(session_id, "last_topic")
-        if lt:
-            return {"answer": "Glad that is useful. Is there anything else about Fine Flow I can help with?", "confidence": 1.0}
-        return {"answer": "Is there anything about Fine Flow I can help you with today — pricing, fines, appeals or the dashboard?", "confidence": 1.0}
+        if lt: return {"answer": f"Glad that is useful. Anything else I can help with?", "confidence": 1.0}
+        return {"answer": "Is there anything about Fine Flow I can help you with today?", "confidence": 1.0}
 
-    # Off-topic — with allowlist for Fine Flow-related terms
-    if _is_off_topic(query):
-        a = "I can only help with Fine Flow questions — is there anything about fines, pricing, appeals or the platform I can help you with?"
-        _push(session_id, "user", query)
-        _push(session_id, "assistant", a)
+    if _is_ot(query):
+        a = "I can only help with Fine Flow questions — is there anything about fines, pricing, appeals or the platform I can help with?"
+        _push(session_id, "user", query); _push(session_id, "assistant", a)
         return {"answer": a, "confidence": 1.0}
 
-    # Vehicle count with sanity check
-    vc = _extract_vehicle_count(query, session_id)
+    vc = _extract_vc(query, session_id)
     if vc == -1:
-        # Impossible number — reject gracefully, do not update profile
-        a = "That does not look right — could you double-check that number? How many vehicles are in your fleet?"
-        _push(session_id, "user", query)
-        _push(session_id, "assistant", a)
+        a = "That number does not look right — could you double-check? How many vehicles are in your fleet?"
+        _push(session_id, "user", query); _push(session_id, "assistant", a)
         return {"answer": a, "confidence": 1.0}
     if vc is not None:
         _reset_aff(session_id)
-        a = _plan_for_vehicles(vc, p)
-        _push(session_id, "user", query)
-        _push(session_id, "assistant", a)
+        a = _plan_answer(vc, p)
+        _push(session_id, "user", query); _push(session_id, "assistant", a)
         _smeta(session_id, "last_topic", "plan_recommendation")
         return {"answer": a, "confidence": 1.0}
 
-    # Purchase intent
-    if _PURCHASE_RE.search(query):
+    if _PURCH.search(query):
         _reset_aff(session_id)
         suffix = "" if p.fleet_size else " How many vehicles are in your fleet so I can point you to the right plan?"
-        a = (
-            "To get started, contact the Fine Flow sales team on +47 32 28 50 00 "
-            f"or at ff.sales@fineflow.com — they will get you set up quickly.{suffix}"
-        )
-        _push(session_id, "user", query)
-        _push(session_id, "assistant", a)
+        a = f"To get started, contact the Fine Flow team on +47 32 28 50 00 or at ff.sales@fineflow.com — they will get you set up quickly.{suffix}"
+        _push(session_id, "user", query); _push(session_id, "assistant", a)
         _smeta(session_id, "last_topic", "sign_up")
         return {"answer": a.strip(), "confidence": 1.0}
 
-    # Affirmative
-    if nq in _AFFIRMATIVE:
+    if nq in _AFF:
         _push(session_id, "user", query)
-        history = _hist(session_id)
-        a = _clean(_affirmative_response(session_id, history[:-1], p))
+        a = _clean(_aff_response(session_id, _hist(session_id)[:-1], p))
         _push(session_id, "assistant", a)
         return {"answer": a, "confidence": 1.0}
 
-    # ══════════════════════════════════════
-    # TIER 2 — RAG + GPT-4o with mode
-    # ══════════════════════════════════════
+    # ── Tier 2: KB match (verbatim) ────────────────────────────────────────
+
+    _push(session_id, "user", query)
+    kb = _kb_match(query)
+    if kb:
+        answer    = kb["answer"]
+        follow_up = kb.get("follow_up")
+        _smeta(session_id, "last_kb", kb)
+        _smeta(session_id, "last_topic", _topic(answer) or kb.get("category",""))
+        _reset_aff(session_id)
+        display = f"{answer}\n\n{follow_up}" if follow_up else answer
+        _push(session_id, "assistant", display)
+        return {"answer": display, "confidence": 1.0}
+
+    # ── Tier 3: RAG + GPT-4o ──────────────────────────────────────────────
 
     _reset_aff(session_id)
-    _push(session_id, "user", query)
+    mode  = ""
+    extra = ""
 
-    intent = _detect_intent(query, nq, _AFFIRMATIVE, _PURE_FILLER)
-    mode   = ""
-    extra  = ""
-
-    if intent == Intent.DIAGNOSTIC and p.turn_count <= 5:
+    if _PROB.search(query) and p.turn_count <= 6:
         mode  = "DIAGNOSE"
-        extra = (
-            "The user has described a specific fine or problem. "
-            "Ask 1-2 short targeted clarifying questions first. "
-            "Do NOT immediately explain Fine Flow. Be genuinely helpful."
-        )
-    elif intent == Intent.CONVINCE:
+        extra = "Ask 1-2 targeted clarifying questions first. Do not immediately pitch Fine Flow."
+    elif _CONV.search(query):
         mode = "PERSUADE"
-        if p.fleet_size or p.fine_volume or p.issues:
-            extra = (
-                "Give a tailored, specific value argument using the customer's own data. "
-                "Reference their fleet size, fine volume and known problems directly. "
-                "Do not use generic marketing copy. Be direct about ROI."
-            )
-        else:
-            extra = "Ask about fleet size and fine volume first — you need their data to give a tailored answer."
-    elif intent == Intent.OBJECTION:
+        extra = ("Use the customer's own data. Be specific about ROI. No generic copy." if p.fleet_size or p.fine_volume or p.issues else "Ask about fleet size and fine volume first so you can give a tailored answer.")
+    elif _OBJ.search(query):
         mode  = "SUPPORT"
-        extra = (
-            "Acknowledge their point first without dismissing it. "
-            "Then reframe using their specific situation if known. "
-            "2-3 sentences max. Do not oversell."
-        )
-    elif intent == Intent.BUYING:
-        mode  = "CLOSE"
-        extra = "Focus on helping them choose the right plan. Ask fleet size if not known."
+        extra = "Acknowledge their point first. Reframe using their situation. 2-3 sentences max."
 
-    # Question limiting — only ask on every other response
-    ask_q = _should_ask_question(session_id)
-    if not ask_q and not extra:
-        extra = "Do NOT end this response with a question. Make your point clearly and stop."
+    if not _ask_this_turn(session_id) and not extra:
+        extra = "Do NOT end with a question. Make your point and stop."
 
-    context  = _retrieve(query)
-    history  = _hist(session_id)
-    messages = _make_messages(query, context, history[:-1], p, mode, extra)
-    answer   = _call_openai(messages, max_tokens=200)
+    ctx  = _rag(query)
+    hist = _hist(session_id)
+    ans  = _ai(_msgs(query, ctx, hist[:-1], p, mode, extra), max_tokens=200)
 
-    if not answer:
-        answer = "The Fine Flow team can help with that — call +47 32 28 50 00 or email ff.sales@fineflow.com."
+    if not ans:
+        ans = "The Fine Flow team can help with that directly — call +47 32 28 50 00 or email ff.sales@fineflow.com."
 
-    answer = _clean(answer)
-    _push(session_id, "assistant", answer)
+    ans = _clean(ans)
+    _push(session_id, "assistant", ans)
+    t = _topic(query) or _topic(ans)
+    if t: _smeta(session_id, "last_topic", t)
+    return {"answer": ans, "confidence": 0.9 if ctx else 0.5}
 
-    topic = _detect_topic(query) or _detect_topic(answer)
-    if topic:
-        _smeta(session_id, "last_topic", topic)
-
-    return {"answer": answer, "confidence": 0.9 if context else 0.5}
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Public wrapper
-# ─────────────────────────────────────────────────────────────────────────────
 
 def answer_sync(q: str, session_id: str = "default") -> Dict[str, Any]:
     try:
         return build_response(q, session_id)
     except Exception:
-        logger.exception("Crash in answer_sync")
+        logger.exception("Crash")
         return {"answer": "Something went wrong. Please try again.", "confidence": 0.0}

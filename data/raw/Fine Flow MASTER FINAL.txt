@@ -1,255 +1,270 @@
-FINEFLOW KNOWLEDGE BASE — COMPLETE REFERENCE
-Last updated: May 2026
-=====================================================
+FINEFLOW KNOWLEDGE BASE
+=======================
+This is the single source of truth for Nova, Fine Flow's AI assistant.
+Last updated: June 2026
 
-TOPIC: WHAT IS FINEFLOW / OVERVIEW / ABOUT
-=====================================================
-Fine Flow is a UK-based automated fleet fine and PCN management platform.
-It handles the entire lifecycle of parking and penalty fines for fleet companies — from reading the fine email, to assigning responsibility to the correct driver, to managing appeals and logging outcomes — so the fleet manager does not have to do any of it manually.
+---
+
+WHAT IS FINE FLOW
+=================
+Fine Flow is an automated system for managing fines from start to finish. It captures incoming fines, extracts the key details, assigns responsibility, tracks decisions, supports disputes and can even spot an appealable fine and construct the appeal for you — all whilst ensuring everything is resolved on time. Instead of manually chasing emails, checking deadlines and managing drivers, Fine Flow keeps the entire process organised, accountable and under control.
+
 Mission: Turning penalties into progress.
 Core promise: Cut admin time by up to 80% and never miss a penalty deadline again.
-Fine Flow provides 24/7 fleet fine tracking, management, and compliance in one place.
+Fine Flow provides 24/7 fleet fine tracking, management and compliance in one place.
 
+---
 
-TOPIC: HOW FINEFLOW WORKS / FINE LIFECYCLE / PROCESS
-=====================================================
-Fine Flow processes every fine through these stages:
+HOW FINE FLOW WORKS — STEP BY STEP
+====================================
+Once a fine enters the system, Fine Flow extracts the key details — including the amount, PCN reference number, vehicle registration, issue date and location. It then compares this against your driver data and logs using vehicle, date and time matching to identify who was responsible. If a match is found the fine is assigned automatically. If not, it is placed into an unassigned queue for quick manual review so nothing gets missed or delayed.
 
 Stage 1 — Email Ingestion:
-Fine Flow monitors the connected Gmail inbox every 1 minute. When an email arrives with keywords like fine, penalty, violation or challan in the subject line, it is picked up automatically. Two connection methods: Gmail OAuth 2.0 (primary, recommended) and App Password IMAP (fallback).
+Fine Flow monitors the connected Gmail inbox every 1 minute. When an email arrives that looks like a penalty notice it is picked up automatically. Two connection methods are available: Gmail OAuth 2.0 (recommended) and App Password IMAP (fallback).
 
 Stage 2 — Data Extraction:
-Fine Flow uses Groq LLaMA 3.1 AI to read the email and extract: fine amount and currency, citation number, type of violation, issue date and time, payment due date, location, and vehicle registration. The fine is created with status RECEIVED and one credit is deducted.
+Fine Flow reads the email and extracts the fine amount, citation number, type of violation, issue date and time, payment due date, location and vehicle registration. The fine is created inside the platform with status RECEIVED.
 
 Stage 3 — Driver Assignment:
-The system matches the fine to a driver using three criteria: vehicle registration must match exactly, fine issue date must be within plus or minus 1 day, and fine time must fall within the driver log start and end time. A clear match sets status to ASSIGNED. No match sets status to UNASSIGNED and places the fine in the admin review queue.
+The system matches the fine to a driver using three criteria: vehicle registration must match exactly, the fine issue date must be within plus or minus 1 day, and the fine time must fall within the driver's logged start and end time. A clear match sets status to ASSIGNED. No match sets status to UNASSIGNED and places the fine in the admin review queue.
 
 Stage 4 — Driver Action:
 The assigned driver can confirm responsibility (status becomes CONFIRMED) or dispute the fine with a reason and optional evidence (status becomes DISPUTED).
 
 Stage 5 — Appeal Review:
-Admin reviews disputed fines. If accepted, Fine Flow generates an appeal letter and sends it to the issuing authority — status becomes UNDER REVIEW. If rejected, fine returns to CONFIRMED.
+Admin reviews disputed fines. If accepted, Fine Flow generates an appeal letter and sends it to the issuing authority — status becomes UNDER REVIEW. If rejected, the fine returns to CONFIRMED.
 
 Stage 6 — Outcome Tracking:
-Final statuses: PAID, CANCELLED (appeal won), or OVERDUE (deadline passed without resolution).
+Final statuses are PAID, CANCELLED (appeal won) or OVERDUE (deadline passed without resolution). Every day at midnight the system checks all fines past their due date and marks them OVERDUE automatically.
 
-Overdue Scheduler: Every day at midnight the system checks all fines past their due date. Any fine with status RECEIVED, UNASSIGNED, ASSIGNED or CONFIRMED that is past its due date becomes OVERDUE automatically.
+---
 
-
-TOPIC: FINE STATUSES / STATUS MEANINGS
-=====================================================
-RECEIVED — Fine ingested from email, data extracted, credit deducted.
-UNASSIGNED — Fine created but no driver matched yet, in admin review queue.
-ASSIGNED — Driver has been matched to the fine automatically.
-CONFIRMED — Driver has confirmed they were responsible.
-DISPUTED — Driver has raised a dispute and appeal record created.
-UNDER REVIEW — Appeal has been submitted to the issuing authority.
-PAID — Fine has been marked as paid.
-CANCELLED — Appeal was successful, fine is cleared.
-OVERDUE — Due date has passed without resolution.
+FINE STATUSES
+=============
+RECEIVED — Fine ingested, data extracted.
+UNASSIGNED — No driver matched yet, in admin review queue.
+ASSIGNED — Driver matched automatically.
+CONFIRMED — Driver confirmed responsibility.
+DISPUTED — Driver raised a dispute, appeal record created.
+UNDER REVIEW — Appeal submitted to the issuing authority.
+PAID — Fine marked as paid.
+CANCELLED — Appeal successful, fine cleared.
+OVERDUE — Due date passed without resolution.
 REVIEW_REQUIRED — Multiple driver matches found, admin must resolve.
 
+---
 
-TOPIC: PAYMENT / DOES FINEFLOW PAY FINES / AUTOMATIC PAYMENT
-=====================================================
-IMPORTANT: Fine Flow does NOT automatically pay fines. Fine Flow NEVER logs into authority websites to pay fines on your behalf.
+PAYMENT — DOES FINE FLOW PAY FINES AUTOMATICALLY
+=================================================
+No — and that is intentional. Government and authority payment systems are heavily protected with bot detection, session controls and security layers that prevent reliable automation. They block automation because of card verification requirements. Trying to bypass that would be unstable and risky, so payments are always completed by you on the authority's site.
 
-Payment portals used by government authorities and councils have anti-bot protection, session controls, and card verification requirements that prevent reliable automation. It would be unstable and unsafe to attempt this.
+What Fine Flow does is everything around that step. It captures incoming fines automatically, extracts all key details, assigns responsibility using your driver data, tracks deadlines, flags risk and keeps everything organised so nothing is missed. By the time you reach payment there is no thinking left — just click the link and complete it. What normally takes hours is reduced to a simple, controlled process.
 
-What Fine Flow does is everything around the payment step: it captures the fine, extracts all details, assigns responsibility, tracks the deadline, flags urgency, and organises everything so the payment process is fast and controlled. When you are ready to pay, Fine Flow takes you directly to the correct authority page with everything already prepared. The actual payment is completed by you on the authority's website.
+Fine Flow does NOT log into council or authority websites on your behalf.
 
+---
 
-TOPIC: PRICING / PLANS / COST / HOW MUCH / PACKAGES / SUBSCRIPTION
-=====================================================
-Fine Flow has four subscription plans and one pay-as-you-go option. All plans include identical features — no locked features, no paywalls.
+PRICING AND PLANS
+=================
+Fine Flow uses a simple pricing model based on fleet size. Every plan includes the same features — no locked features and no paywalls.
 
-ESSENTIAL: £99 per month — ideal for fleets of 5 to 50 vehicles.
-CORE: £199 per month — ideal for fleets of 51 to 100 vehicles.
-ADVANCED: £399 per month — ideal for fleets of 101 to 200 vehicles.
-ELITE: £499 per month — ideal for fleets of 200 or more vehicles (unlimited).
+Essential: £99 per month — ideal for fleets of 5 to 50 vehicles.
+Core: £199 per month — ideal for fleets of 51 to 100 vehicles.
+Elite: £499 per month — ideal for fleets over 100 vehicles, unlimited.
 
-Per-fine rate within monthly allowance: £0.75 per fine.
-Overage rate (beyond monthly allowance): £2.50 per fine.
-Pay-as-you-go option (no subscription, no monthly fee, zero lock-in): £2.75 per fine.
+Every fine on these plans is also charged at £0.75 per fine within the monthly allowance.
+Overage (beyond monthly allowance): £2.50 per fine.
+Pay-as-you-go option: No subscription, no monthly fee. £2.75 per fine. Zero lock-in.
 
-There is NO £2.00 fee anywhere in Fine Flow. The overage is £2.50 and PAYG is £2.75. These are different things.
+There is NO £2.00 fee anywhere in Fine Flow.
 
-How to choose:
+How to choose your plan:
 - 5 to 50 vehicles → Essential at £99/month
 - 51 to 100 vehicles → Core at £199/month
-- 101 to 200 vehicles → Advanced at £399/month
-- 200+ vehicles → Elite at £499/month
+- 100+ vehicles → Elite at £499/month
 - Low or unpredictable fine volume → Pay-as-you-go at £2.75 per fine
 
+---
 
-TOPIC: BILLING / INVOICING / STRIPE / CREDITS / CANCEL
-=====================================================
+BILLING AND CREDITS
+===================
 Fine Flow bills monthly via Stripe. Credits reset to zero at the start of each new billing cycle — unused credits do not roll over. Overage charges are added to the outstanding balance and collected at the end of the billing cycle. There is a £10 per vehicle charge if the vehicle limit is exceeded. A company cannot resubscribe if it has an outstanding balance — that must be cleared first. If a company cancels, a cooldown period applies until the end of the current billing period.
 
+---
 
-TOPIC: REFERRAL PROGRAMME / REFERRAL SYSTEM / REFER A COMPANY / DISCOUNT / CREDITS
-=====================================================
-Fine Flow has an active referral programme with two parts:
+APPEALS AND DISPUTES
+====================
+Yes — Fine Flow does not just manage appeals, it learns from them. It generates an appeal using the fine details and historical outcomes, and can send it directly to the issuing authority. Over time it adapts based on wins and rejections, refining its approach and giving you a success probability so you can make better decisions before submitting.
 
-Part 1 — Credit Reward Per Referral:
-When a company signs up using your referral code and subscribes to a plan, you earn credits based on their fleet size:
-- 1 to 25 vehicles: 100 credits awarded
-- 26 to 100 vehicles: 250 credits awarded
-- 101 to 500 vehicles: 750 credits awarded
-- 501 or more vehicles: 2,000 credits awarded
-
-Part 2 — Referral Tiers (subscription discounts):
-- Silver tier (3 referrals): 100 bonus credits, one-time
-- Gold tier (5 referrals): 10% off monthly subscription for 12 months
-- Platinum tier (10 referrals): 15% off monthly subscription for 12 months
-- Titan tier (25 referrals): 20% off monthly subscription for life
-
-New joiner reward: Any company that joins using a referral code receives £75 worth of credits on subscribing.
-
-How it works: Generate your unique referral code from the Referrals page, share the link, and when the new company subscribes you receive credits automatically.
-
-
-TOPIC: APPEALS / DISPUTE / CHALLENGE A FINE / APPEAL MANAGEMENT
-=====================================================
-Fine Flow manages appeals as a fully structured process:
-
-How appeals work:
+How the appeal process works:
 1. Driver disputes a fine from their dashboard, providing a reason and optional evidence (JPG, PNG or PDF, up to 10MB).
 2. Admin reviews the appeal and can accept or reject it.
-3. If accepted: Fine Flow generates the appeal letter using the fine details and historical outcomes, and sends it directly to the issuing authority by email. Status becomes UNDER REVIEW.
-4. If rejected: Fine returns to CONFIRMED status and the driver must pay.
+3. If accepted: Fine Flow generates the appeal letter and sends it directly to the issuing authority. Status becomes UNDER REVIEW.
+4. If rejected: Fine returns to CONFIRMED status.
 
-Appeal intelligence:
-Fine Flow does not treat each appeal in isolation. It tracks outcomes from every appeal submitted and learns what has been accepted or rejected before. Over time it improves its recommendations and generates stronger appeal letters based on what actually works.
+Win probability: Each appeal has a win probability percentage shown before submission. This is a guidance signal based on past outcomes — not a guarantee. It helps you decide whether to submit before investing time in the appeal.
 
-Win percentage:
-Each appeal has a win probability percentage shown before submission. This is a guidance signal based on past outcomes — not a guarantee. It helps you decide whether to submit before investing time in the appeal.
+Fine Flow works with all UK councils and issuing authorities — there is no restriction on which council or authority it is.
 
+---
 
-TOPIC: DRIVER MATCHING / HOW DRIVERS ARE ASSIGNED / VEHICLE LOGS
-=====================================================
-Fine Flow matches fines to drivers automatically using your uploaded driver logs. The matching uses three criteria:
-1. Vehicle registration must match exactly.
-2. Fine issue date must be within plus or minus 1 day of a driver log entry.
-3. Fine time must fall within the driver's logged start and end time.
+DRIVER MATCHING AND ASSIGNMENT
+================================
+Fine Flow uses your driver data to work out responsibility automatically. It compares each fine against your uploaded logs checking the vehicle, date and time to see who was using it. When there is a clear match it assigns it instantly. If not, it highlights it for review so the process keeps moving without errors or delays. You can assign it in seconds using the vehicle or driver details and the process continues as normal.
 
-If all three match: fine is ASSIGNED to that driver automatically.
-If no match: fine is UNASSIGNED and placed in the admin queue for manual review.
-If multiple drivers match: fine is flagged as REVIEW_REQUIRED for admin resolution.
+If a fine cannot be matched automatically it is flagged for review — nothing breaks and nothing gets missed.
 
-Driver logs are not mandatory. Without them, Fine Flow still captures and tracks all fines — it just means manual assignment is needed. The better your logs, the more Fine Flow can automate.
+Driver logs are not mandatory. Without them Fine Flow still captures and tracks all fines but assignment is handled manually. The better your logs, the more Fine Flow can automate.
 
+---
 
-TOPIC: GMAIL CONNECTION / EMAIL SETUP / CONNECT INBOX
-=====================================================
-Fine Flow supports two methods to connect a Gmail inbox:
+DRIVER MANAGEMENT AND ADDING DRIVERS
+======================================
+Drivers can be added individually through the dashboard or bulk imported via CSV upload.
 
-Method 1 — Gmail OAuth 2.0 (recommended):
-Click Connect Gmail in the dashboard, approve access via Google login. No password stored in Fine Flow. Tokens encrypted with AES-256-CBC and auto-refresh 5 minutes before expiry.
+Required CSV columns: drivername, driveremail, driverphone, licensenumber, isactive.
+Optional: assignedvehicle, username, password. If no password is provided the system generates one and emails credentials to the driver.
 
-Method 2 — App Password IMAP (fallback):
-Generate a 16-character app password in your Google account settings and paste it into Fine Flow. Password encrypted before storage.
+Driver dashboard shows: total fines received, fines pending confirmation, points on licence, total amount paid, appeals in progress, safe driving streak (days since last fine) and a 12-month fine history chart. Drivers can only see their own data.
 
-The system always tries OAuth first. If no OAuth tokens exist it falls back to App Password.
+---
 
+GMAIL AND EMAIL CONNECTION
+===========================
+Two methods to connect a Gmail inbox:
 
-TOPIC: DRIVER MANAGEMENT / ADDING DRIVERS / DRIVER DASHBOARD / DRIVER FEATURES
-=====================================================
-Adding drivers:
-- Individually via the dashboard
-- Bulk import via CSV upload
+Method 1 — Gmail OAuth 2.0 (recommended): Click Connect Gmail in the dashboard and approve access via Google login. No password stored in Fine Flow. Tokens are encrypted with AES-256-CBC and auto-refresh 5 minutes before expiry.
 
-Required CSV columns: drivername, driveremail, driverphone, licensenumber, isactive
-Optional CSV columns: assignedvehicle, username, password
-If no password is provided, the system generates one and emails credentials to the driver.
+Method 2 — App Password IMAP (fallback): Generate a 16-character app password in your Google account settings and paste it into Fine Flow. Password is encrypted before storage.
 
-Driver dashboard shows:
-- Total fines received
-- Fines pending confirmation
-- Points on licence (all fines except cancelled and disputed)
-- Total amount paid
-- Appeals in progress
-- Safe driving streak (days since last fine)
-- 12-month fine history chart
+The system always tries OAuth first and falls back to App Password if no OAuth tokens exist.
 
-Drivers can only see their own data. They cannot access other drivers' records.
+---
 
+SECURITY AND DATA PROTECTION
+==============================
+Fine Flow is fully GDPR compliant. It uses JWT authentication with 24-hour token expiry, bcrypt password hashing at 10 salt rounds, AES-256-CBC encryption for Gmail tokens, and a secure one-time token for password reset with 1-hour expiry. Role-based access control ensures drivers cannot access company routes and companies cannot access admin routes.
 
-TOPIC: SECURITY / DATA SAFETY / GDPR / PRIVACY / CARD DETAILS
-=====================================================
-Fine Flow uses:
-- JWT authentication with 24-hour token expiry
-- Bcrypt password hashing at 10 salt rounds
-- AES-256-CBC encryption for Gmail tokens and app passwords
-- Secure one-time token for password reset (1-hour expiry)
-- Role-based middleware: drivers cannot access company routes, companies cannot access admin routes
+Fine Flow never sells or shares data with third parties. Fine Flow never stores raw card details — all payments are processed externally via Stripe.
 
-GDPR: All data is fully compliant. Fine Flow never sells or shares data with third parties.
-Payments: Handled externally via Stripe. Fine Flow never stores raw card details.
+---
 
+REFERRAL PROGRAMME
+==================
+Fine Flow has an active referral programme. When a company signs up using your referral code and subscribes, you earn credits based on their fleet size:
+- 1 to 25 vehicles: 100 credits
+- 26 to 100 vehicles: 250 credits
+- 101 to 500 vehicles: 750 credits
+- 501 or more vehicles: 2,000 credits
 
-TOPIC: DASHBOARD / COMPANY DASHBOARD / WHAT CAN I SEE
-=====================================================
-Company dashboard shows:
-- Fines processed this year
-- Estimated admin cost saved
-- Time saved by using Fine Flow
-- Appeals won
-- Credit balance, credit limit, credits used
-- Current subscription plan and status
-- Vehicle count against vehicle limit
-- Outstanding balance and next billing date
-- Processing costs breakdown
+Referral tiers:
+- Silver (3 referrals): 100 bonus credits one-time
+- Gold (5 referrals): 10% off monthly subscription for 12 months
+- Platinum (10 referrals): 15% off monthly subscription for 12 months
+- Titan (25 referrals): 20% off monthly subscription for life
 
-The dashboard is built around urgency — it surfaces what must be dealt with today, not just raw data.
+New joiners using a referral code receive £75 in credits on subscribing.
 
+---
 
-TOPIC: USER ROLES / ACCESS LEVELS / PERMISSIONS
-=====================================================
-Admin (Fine Flow internal team only): Full access to all companies and system metrics. Can create admins, delete companies.
-Company: Manages own drivers, fines, appeals, billing and reports. Limited to own company data only.
+DASHBOARD
+=========
+The company dashboard shows: fines processed this year, estimated admin cost saved, time saved, appeals won, credit balance, current subscription plan, vehicle count against vehicle limit, outstanding balance and next billing date. It is built around urgency — surfacing what must be dealt with today.
+
+What to do right now: Focus on anything urgent first. Always prioritise fines close to their deadline or already overdue to avoid increased penalties. After that clear any unassigned or unconfirmed fines so everything is tracked and dealt with.
+
+---
+
+REPORTING
+=========
+Monthly Fines Report (PDF): Citation number, amount, violation type, issue date, due date, vehicle registration, location, authority, status, appeal status.
+Appeals History (PDF and CSV): Appeal ID, fine details, vehicle registration, driver info, admin status, authority status, final outcome, reason, evidence link.
+Driver Violation Report (PDF): Driver name, email, phone, licence number, per-violation breakdown.
+
+---
+
+USER ROLES AND PERMISSIONS
+===========================
+Admin (Fine Flow internal team only): Full access to all companies and system metrics.
+Company user: Manages own drivers, fines, appeals, billing and reports. Can only see own company data.
 Driver: Views own personal fines only. Can confirm or dispute assigned fines. Cannot see other drivers.
 
+---
 
-TOPIC: REPORTS / EXPORTS / PDF / CSV
-=====================================================
-Monthly Fines Report — PDF: Citation number, amount, violation type, issue date, due date, vehicle reg, location, authority, status, appeal status.
-Appeals History — PDF and CSV: Appeal ID, fine details, vehicle reg, driver info, admin status, authority status, final outcome, reason, evidence link.
-Driver Violation Report — PDF: Driver name, email, phone, licence number, per-violation breakdown.
-
-
-TOPIC: SAVINGS / TIME SAVED / ROI / VALUE / HOW MUCH CAN I SAVE
-=====================================================
+TIME AND COST SAVINGS
+======================
 Fine Flow cuts admin time by up to 80%.
-
-Typical monthly savings by fleet size:
-- Small fleet (5 to 50 vehicles): over £400 per month saved
-- Medium fleet (51 to 200 vehicles): over £1,200 per month saved
-- Large fleet (200+ vehicles): over £4,000 per month saved
+Small fleet (5 to 50 vehicles): over £400 per month saved.
+Medium fleet (51 to 200 vehicles): over £1,200 per month saved.
+Large fleet (200+ vehicles): over £4,000 per month saved.
 
 These savings come from eliminating manual fine logging, deadline tracking, driver chasing, report generation and appeals management.
 
+---
 
-TOPIC: KEY FEATURES / WHAT IS INCLUDED / CAPABILITIES
-=====================================================
-Every Fine Flow plan includes:
+FEATURES INCLUDED IN EVERY PLAN
+=================================
+Every Fine Flow plan includes the same features with no paywalls or locked tiers:
 - Real-time fine alerts when a new PCN is flagged
 - Automated compliance reporting and audit trails
-- Driver performance analytics to identify high-risk drivers
-- Pre-day resolution: appeals processed, drivers assigned, deadlines tracked overnight
+- Driver performance analytics
 - AI-assisted appeal generation using historical outcomes
 - Full appeal lifecycle management from dispute to outcome
-- 24/7 Gmail monitoring (every 1 minute)
-- Nightly overdue scheduler (runs at midnight)
+- 24/7 Gmail monitoring every 1 minute
+- Nightly overdue scheduler at midnight
 - CSV driver import and bulk processing tools
 - Full dashboard with credit, billing and fleet visibility
 - PDF and CSV reporting
 
+---
 
-TOPIC: CONTACT / PHONE NUMBER / EMAIL / SALES / SUPPORT / HOW TO REACH
-=====================================================
+HOW MANY FINES DO I CURRENTLY HAVE
+====================================
+I do not have direct access to your live account data. Your dashboard shows your current fines including anything pending, unassigned or overdue. If you tell me what you are seeing I can help you prioritise what to deal with first.
+
+---
+
+CONTACT AND SUPPORT
+===================
 Sales and support phone: +47 32 28 50 00
 Sales and support email: ff.sales@fineflow.com
-Regional offices: Edinburgh, Glasgow, Belfast, Isle of Man, Manchester, London, Severn, Hamburg, Dublin
 
-For new enquiries the sales team needs: First Name, Last Name, Business Email, Mobile Number, Company Name and context about your needs.
+For new enquiries the team needs: First Name, Last Name, Business Email, Mobile Number, Company Name and context about your needs.
+
+---
+
+UK TRAFFIC FINES AND PENALTY NOTICES — GENERAL KNOWLEDGE
+==========================================================
+Fine Flow handles all types of UK fleet penalty notices including:
+
+Penalty Charge Notices (PCNs): Issued by local councils for parking, bus lane and moving traffic violations. Council-issued PCNs are civil matters. Payment deadlines are typically 28 days at full rate or 14 days at 50% discount.
+
+Fixed Penalty Notices (FPNs): Issued by police for minor road traffic offences. These carry endorsements and points on licence.
+
+Notice to Owner (NTO): Issued to the registered keeper when a PCN is unpaid. Fine Flow captures and tracks these automatically.
+
+Charge Certificate: Issued if a PCN remains unpaid after the NTO stage. Amount increases by 50%. Fine Flow flags these as high urgency.
+
+Debt Registration: Final stage before enforcement action. Fine Flow marks these as critical.
+
+Common violation types Fine Flow handles:
+- Parking violations (council PCNs)
+- Bus lane violations
+- Moving traffic violations (box junctions, banned turns)
+- Congestion charge failures
+- Clean Air Zone (CAZ) charges
+- Low Emission Zone (LEZ) charges
+- Dartford Crossing charges
+- Bridge and tunnel tolls
+- Red light camera offences
+- Speed camera notices (where issued to fleet keeper)
+
+UK issuing authorities include all UK local councils, Transport for London (TfL), National Highways, DVLA and police forces. Fine Flow works with all of them.
+
+Appeal rights: Most PCNs have a formal challenge process. The first stage is an informal challenge to the issuing authority. If rejected, a formal representation can be made. If that is rejected, the case goes to an independent adjudicator (PATAS or PATROL). Fine Flow manages this entire process.
+
+---
+
+SIGN UP AND GETTING STARTED
+============================
+To get started with Fine Flow, contact the sales team on +47 32 28 50 00 or email ff.sales@fineflow.com. They will walk you through choosing the right plan, setting up your account and connecting your inbox. The setup process is straightforward and the team will have you up and running quickly.

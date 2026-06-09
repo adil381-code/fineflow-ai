@@ -243,5 +243,279 @@
     "keywords": ["how many credits", "credits when subscribe", "plan credits", "credits renew", "add credits", "out of credits", "credit balance", "plan allowance"],
     "answer": "Fine Flow plans include a monthly fine allowance rather than a credit wallet. Each fine processed counts against that allowance. The allowance resets to zero at the start of each billing cycle and unused allowance does not roll over. If you exhaust your allowance, additional fines are charged at the £2.50 overage rate. You can earn bonus credits separately through the referral programme.",
     "follow_up": null
+  }[
+  {
+    "id": "FF-001",
+    "category": "core_overview",
+    "keywords": ["what is fineflow", "what is fine flow", "tell me about fineflow", "tell me about fine flow", "what does fineflow do", "what does fine flow do", "explain fineflow", "explain fine flow", "about fineflow", "about fine flow", "overview of fineflow"],
+    "answer": "Fine Flow is an automated system for managing fines from start to finish. It captures incoming fines, extracts the key details, assigns responsibility, tracks decisions, supports disputes and can even spot an appealable fine and construct the appeal for you — all whilst ensuring everything is resolved on time. Instead of manually chasing emails, checking deadlines and managing drivers, Fine Flow keeps the entire process organised, accountable and under control. Our mission: turning penalties into progress.",
+    "follow_up": "Want a breakdown of how it all works?"
+  },
+  {
+    "id": "FF-002",
+    "category": "fleet_help",
+    "keywords": ["how does fineflow help fleets", "how does fine flow help fleets", "help my fleet", "help fleets", "how does it help fleet managers", "fineflow for fleet", "fine flow for fleet", "fleet management fineflow", "what value for fleet", "why use fineflow for fleet"],
+    "answer": "Fine Flow provides 24/7 fleet fine tracking, management and compliance in one place. It reduces manual administrative work by up to 80% and ensures no penalty deadlines are ever missed. Fines are automatically captured from your inbox, matched to the right driver using your vehicle logs, tracked through every stage and managed all the way to resolution — without your team having to chase a single email or spreadsheet.",
+    "follow_up": "How many vehicles are in your fleet? I can show you exactly what Fine Flow would look like for your operation."
+  },
+  {
+    "id": "FF-003",
+    "category": "fine_lifecycle",
+    "keywords": ["what happens to a fine once it comes in", "fine enters system", "fine lifecycle", "how is a fine processed", "step by step how it works", "breakdown of how it works", "how does it work step by step", "walk me through the process", "how the process goes", "fine process"],
+    "answer": "The moment a fine arrives in your connected inbox, Fine Flow picks it up automatically. It reads the email, extracts the key details — amount, PCN reference, vehicle registration, issue date, due date and issuing authority — and creates the fine inside the platform with status RECEIVED. It then compares this against your driver data using vehicle, date and time matching to identify who was responsible. If a match is found the fine is assigned automatically. If not, it is placed into the UNASSIGNED queue for quick manual review so nothing gets missed.",
+    "follow_up": "Would you like me to walk you through the assignment and dispute stages?"
+  },
+  {
+    "id": "FF-004",
+    "category": "email_ingestion",
+    "keywords": ["how does fineflow get fines", "how do fines come in", "email monitoring", "gmail connection", "connect inbox", "how are fines captured from email", "inbox monitoring"],
+    "answer": "Fine Flow connects to your fine-handling Gmail inbox and monitors it every minute. When an email arrives that looks like a penalty notice, the system picks it up automatically, extracts all the key details and turns it into a structured record. Your team does not need to manually copy anything out of emails. Alternatively, an admin can manually upload fines directly if you prefer not to connect an inbox.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-005",
+    "category": "payments",
+    "keywords": ["does fineflow pay fines", "can fineflow pay fines on my behalf", "will it pay my fines", "automatically pay fines", "auto pay fines", "fineflow pay on my behalf", "does it handle payment"],
+    "answer": "No — and that is intentional. Government and authority payment portals have anti-bot protection, session controls and card verification requirements that make automation impossible and unsafe. Trying to bypass that would be unstable and risky, so payments are always completed by you directly on the authority's site. What Fine Flow does is everything around that step — capturing fines, assigning responsibility, tracking deadlines, flagging urgency — so by the time you reach payment there is no thinking left. Just click the link and complete it.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-006",
+    "category": "payments",
+    "keywords": ["log into council websites", "log into authority website", "can you log in for me", "council website payment", "pay on authority site for me"],
+    "answer": "No. Fine Flow does not log into authority or council websites on your behalf. Payment portals use anti-bot protection and card verification that makes automation impossible. Fine Flow handles everything up to that final step — when you are ready to pay you go directly to the correct authority page with everything already prepared and organised.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-007",
+    "category": "matching",
+    "keywords": ["how does fineflow know which driver", "driver matching", "which driver is responsible", "how is driver assigned", "find the driver", "match fine to driver", "assign driver to fine"],
+    "answer": "Fine Flow uses your driver data to work out responsibility automatically. It compares each fine against your uploaded logs checking vehicle registration, date within one day and time window to see who was using that vehicle. When there is a clear match it assigns the fine instantly. If not, it highlights it for review so the process keeps moving without errors or delays. You can reassign it in seconds using the vehicle or driver details.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-008",
+    "category": "matching",
+    "keywords": ["reassign a fine", "reassign fine to driver", "fine cannot be matched", "no driver match", "unmatched fine", "unassigned fine", "what happens if no match", "reassign driver on fine"],
+    "answer": "If a fine cannot be confidently matched it is placed into either the UNASSIGNED or REVIEW_REQUIRED queue. From there an admin reviews the case and resolves the correct driver assignment based on vehicle registration, timing and driver logs. You can reassign a fine to a different driver at any point — if the initially assigned driver disputes it or there was an assignment error, the admin updates the driver details and the process continues as normal.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-009",
+    "category": "appeals",
+    "keywords": ["can i appeal a fine with fineflow", "help me appeal a fine", "appeal a fine", "can fineflow appeal", "dispute a fine", "challenge a fine with fineflow", "make an appeal"],
+    "answer": "Yes — Fine Flow does not just manage appeals, it learns from them. When a driver disputes a fine, the admin reviews it and can accept or reject the appeal. If accepted, Fine Flow generates an appeal letter using the fine details and historical outcomes, and sends it directly to the issuing authority. Over time it adapts based on wins and rejections — generating stronger appeal letters, refining its approach and giving you a win probability percentage before you submit so you can make better decisions.",
+    "follow_up": "Would you like me to explain how the win probability works and how Fine Flow learns from past outcomes?"
+  },
+  {
+    "id": "FF-010",
+    "category": "appeals",
+    "keywords": ["does fineflow support all councils", "which councils does fineflow support", "all uk councils", "any council", "how many uk councils", "how many authorities", "all authorities supported", "does it work with my council"],
+    "answer": "Fine Flow works with all UK councils and issuing authorities. When an appeal is accepted, Fine Flow generates the appeal letter and sends it directly to whichever authority issued the fine. There is no restriction on which council or authority it is.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-011",
+    "category": "appeals",
+    "keywords": ["track appeal status", "appeal status", "what happens to my appeal", "appeal progress", "where is my appeal", "under review status", "can i track appeal"],
+    "answer": "Yes. Every appeal has a tracked status inside Fine Flow. When a driver disputes a fine the status becomes DISPUTED. If the admin reviews and accepts the dispute, Fine Flow submits the appeal to the authority and the status moves to UNDER REVIEW. From there the outcome is tracked through to ACCEPTED, REJECTED or CANCELLED. Every stage is visible on your dashboard so nothing disappears into an email chain.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-012",
+    "category": "appeals_probability",
+    "keywords": ["win percentage", "win probability", "what is win probability", "appeal success rate", "chance of winning appeal", "appeal win rate", "how likely is my appeal to succeed"],
+    "answer": "The win percentage is a guidance signal, not a guarantee. It reflects how likely a similar appeal is to succeed based on past results, matched patterns and the quality of evidence available. The more real outcomes the system captures over time, the more accurate that percentage becomes. It is there to help you decide whether to submit — not to promise a result.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-013",
+    "category": "pricing",
+    "keywords": ["how much does fineflow cost", "pricing plans", "what are the plans", "subscription options", "how much is fine flow", "plan prices", "what plans are available", "plans and pricing", "looking for plans", "which plan fits me"],
+    "answer": "Fine Flow uses a simple pricing model based on fleet size. Essential is £99 per month for 5 to 50 vehicles. Core is £199 per month for 51 to 100 vehicles. Advanced is £399 per month for 101 to 200 vehicles. Elite is £499 per month for 200 or more vehicles. Every plan includes a monthly fine allowance with fines charged at £0.75 each within that limit. If you exceed your allowance, additional fines are charged at £2.50 per fine. There is also a pay-as-you-go option at £2.75 per fine with no subscription and no lock-in.",
+    "follow_up": "How many vehicles do you run? I can point you to the right plan straightaway."
+  },
+  {
+    "id": "FF-014",
+    "category": "pricing",
+    "keywords": ["overage charge", "exceed plan limit", "go over my allowance", "too many fines", "over my plan limit", "what happens if i go over", "fine limit exceeded", "out of limit"],
+    "answer": "If you exceed your plan's monthly fine allowance, each additional fine is charged at £2.50. The £0.75 per-fine rate only applies within your included allowance. Overage charges are collected at the end of your billing cycle. Unused allowance does not roll over to the next cycle.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-015",
+    "category": "pricing",
+    "keywords": ["pay as you go option", "payg", "no subscription option", "pay per fine no subscription", "pay as i go", "flexible pricing no contract"],
+    "answer": "Yes. There is a pay-as-you-go option with no monthly subscription fee and zero lock-in. You pay £2.75 per fine as you go. This is a standalone pricing model — no monthly allowance, no subscription — suited to fleets with low or unpredictable fine volumes who do not want a fixed monthly commitment.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-016",
+    "category": "pricing",
+    "keywords": ["what does the 0.75 per fine fee cover", "what does 0.75 cover", "75p fee", "per fine fee explained", "what is included in 0.75 fee"],
+    "answer": "The £0.75 per-fine fee covers the full management of each fine within your monthly allowance — capturing the details, assigning responsibility, tracking deadlines and maintaining the fine record through to its final status. It applies once per fine only. Disputes, appeals, reassignments and tracking do not create additional charges. Fine Flow does not manage or process payments — the fee covers data and workflow management only.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-017",
+    "category": "pricing",
+    "keywords": ["do all plans have same features", "are all plans the same", "locked features", "no paywall", "plan differences", "what is different between plans"],
+    "answer": "Yes — every Fine Flow plan includes exactly the same features. There are no locked features or paywalls. The only difference between plans is the number of vehicles covered and the monthly fine allowance. Whether you are on Essential or Elite, you have access to the full platform from day one.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-018",
+    "category": "pricing",
+    "keywords": ["difference between 2.75 and 0.75", "payg vs subscription fee", "2.75 vs 0.75 difference", "which fee applies to me"],
+    "answer": "They are two completely different pricing models. The £0.75 fee applies when you are on a subscription plan and is charged per fine within your monthly allowance. The £2.75 fee only applies on the pay-as-you-go model where there is no subscription, no monthly allowance and no lock-in — you simply pay £2.75 per fine as you go.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-019",
+    "category": "billing",
+    "keywords": ["how does billing work", "billing cycle", "when am i billed", "billed for fines", "how billing cycle works", "stripe billing"],
+    "answer": "Fine Flow bills monthly via Stripe. Your monthly fine allowance resets to zero at the start of each new billing cycle — unused allowance does not roll over. Fines within your allowance are charged at £0.75 each. Overage is charged at £2.50 per fine and collected at the end of the cycle. On the pay-as-you-go option there is no monthly fee — you are billed at £2.75 per fine as each one is processed.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-020",
+    "category": "billing",
+    "keywords": ["cancel account", "what happens if i cancel", "cancellation policy", "still owe after cancelling", "cancel fine flow subscription"],
+    "answer": "If you cancel, a cooldown period applies — you cannot resubscribe until the end of your current billing period. Any fines processed during your active subscription remain chargeable. Any outstanding balance must be cleared before you can resubscribe.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-021",
+    "category": "billing",
+    "keywords": ["multiple cards", "different payment methods", "assign payment method", "can i use multiple cards", "payment method options"],
+    "answer": "No — Fine Flow does not store, manage or process card details. All billing is handled externally through Stripe using a single payment method per account. Fine Flow never has access to your raw card information at any point.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-022",
+    "category": "billing",
+    "keywords": ["reassign and pay is that 2 charges", "reassign then pay two fines", "is reassignment charged again", "reassigned fine paid two charges"],
+    "answer": "No — reassigning a fine does not create a second charge. The £0.75 fee applies once when the fine is first processed. Reassigning it to a different driver is an admin action within the same fine record and does not trigger another charge.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-023",
+    "category": "billing",
+    "keywords": ["appeal then pay is that 2 charges", "appeal and pay two charges", "is appealing charged again", "if i appeal and pay is it 2 fees"],
+    "answer": "No — appealing a fine does not create a second charge. The £0.75 fee applies once when the fine is first processed. An appeal is a separate workflow stage and does not trigger an additional processing fee.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-024",
+    "category": "upload",
+    "keywords": ["can i manually upload fines", "bulk upload fines", "upload fines manually", "can i upload fines", "manual fine upload", "bulk fine upload"],
+    "answer": "Yes — an admin can manually upload fines directly into Fine Flow without connecting an inbox. Fine Flow will extract the key details from the uploaded documents. This works alongside the automated email monitoring and gives you full flexibility in how fines enter the system.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-025",
+    "category": "overdue",
+    "keywords": ["what happens if i dont deal with fine", "fine escalate", "missed deadline fine", "overdue fine", "fine gets expensive", "late fine", "fine not paid in time"],
+    "answer": "If a fine is left too long it can escalate and become more expensive. Fine Flow helps prevent that by tracking deadlines, flagging urgent fines and keeping them visible before they become a problem. If a due date is missed the fine is marked OVERDUE automatically so it can be dealt with immediately. Fine Flow gives you plenty of warning well in advance.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-026",
+    "category": "prioritisation",
+    "keywords": ["what should i do right now", "what to do first", "where to start with fines", "most urgent fines", "priority order", "first steps fines"],
+    "answer": "Start with urgency. Deal with fines closest to their deadline first, then anything already overdue. After that clear anything unassigned or awaiting confirmation so nothing is left hanging. Fine Flow helps you focus on the next most important action rather than just showing you a list of data.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-027",
+    "category": "live_data",
+    "keywords": ["how many fines do i have", "current fines", "my active fines", "how many fines currently", "live fine count"],
+    "answer": "Your current fines including anything pending, unassigned or overdue are all visible on your Fine Flow dashboard. Log in and the dashboard shows you exactly what is outstanding and what needs attention first. If you tell me what you are seeing I can help you prioritise.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-028",
+    "category": "security",
+    "keywords": ["is fineflow gdpr compliant", "gdpr compliance", "is my data safe", "data security fineflow", "data protection", "privacy fineflow"],
+    "answer": "Yes. Fine Flow is fully GDPR compliant. It uses JWT authentication, bcrypt password hashing and AES-256-CBC encryption for stored tokens. Fine Flow never sells or shares your data with third parties — your data is yours. Payments are handled externally via Stripe and Fine Flow never stores raw card details.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-029",
+    "category": "security",
+    "keywords": ["is my card data safe", "card details safe", "does fineflow store card details", "card storage", "payment card security", "is my card information stored"],
+    "answer": "Fine Flow never stores your card details — that is the most important thing to know. All payment and billing is handled externally through Stripe. Fine Flow has no access to your raw card information at any point.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-030",
+    "category": "dashboard",
+    "keywords": ["what does company dashboard show", "company dashboard features", "what can i see on dashboard", "dashboard overview"],
+    "answer": "The company dashboard focuses on urgency and action. It shows outstanding fines, anything overdue or unassigned, appeals in progress, your credit balance, billing status, and estimated time and money saved. It is designed to tell you what needs attention today, not just display raw data.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-031",
+    "category": "dashboard",
+    "keywords": ["what does driver dashboard show", "driver dashboard features", "what does a driver see", "driver view", "driver portal"],
+    "answer": "The driver dashboard is personal to each driver. It shows their own fines, points on licence, appeals in progress, safe driving streak and a 12-month fine history. Drivers can only see their own data — they cannot access other drivers' records or company-wide information.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-032",
+    "category": "referral",
+    "keywords": ["referral programme", "referral system", "refer a company", "referral credits", "earn credits by referring", "referral discount", "is there a referral scheme"],
+    "answer": "Yes — Fine Flow has an active referral programme. When a company signs up using your referral code and subscribes, you earn bonus credits based on their fleet size: 100 credits for 1 to 25 vehicles, 250 for 26 to 100, 750 for 101 to 500 and 2,000 for 500 or more. As you hit milestones you unlock subscription discounts — up to 20% off for life at the Titan tier. Any new company joining with a referral code gets £75 in credits when they subscribe.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-033",
+    "category": "driver_logs",
+    "keywords": ["do i need driver logs", "are driver logs required", "csv upload drivers", "without driver logs", "driver logs necessary"],
+    "answer": "No. Driver logs improve automation and make matching much more accurate but they are not required. If logs are missing, Fine Flow still captures, tracks and organises fines — it simply means more assignment work is handled manually. The system works with imperfect data, not only with ideal data.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-034",
+    "category": "contact",
+    "keywords": ["how do i contact fineflow", "fineflow phone number", "fineflow email", "how to reach fineflow", "fineflow support", "get in touch with fineflow", "fineflow sales contact"],
+    "answer": "You can reach the Fine Flow team by phone on +47 32 28 50 00 or by email at ff.sales@fineflow.com. Fine Flow has offices in Edinburgh, Glasgow, Belfast, Manchester, London, Dublin and Hamburg.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-035",
+    "category": "savings",
+    "keywords": ["how much money will it save me", "how much time will it save", "cost savings fineflow", "time savings fineflow", "roi fineflow", "is fineflow worth it", "financial savings", "how much can i save"],
+    "answer": "Fine Flow cuts admin time by up to 80% and ensures you never miss a penalty deadline again. For small fleets of up to 50 vehicles, clients typically save over £400 per month. Medium fleets of 51 to 200 vehicles typically save over £1,200 per month. Large fleets of 200 or more vehicles typically save over £4,000 per month. These savings come from eliminating manual fine logging, deadline tracking, driver chasing and report generation.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-036",
+    "category": "credits",
+    "keywords": ["how many credits do i get", "plan credits", "credits when i subscribe", "out of credits", "credit balance", "allowance reset", "unused credits"],
+    "answer": "Fine Flow plans include a monthly fine allowance rather than a credit wallet. Each fine processed counts against that allowance. The allowance resets to zero at the start of each billing cycle and unused allowance does not roll over. If you run out, additional fines are charged at the £2.50 overage rate. Bonus credits can be earned separately through the referral programme.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-037",
+    "category": "signup",
+    "keywords": ["how do i sign up", "sign up process", "how to get started with fineflow", "how to subscribe", "getting started", "onboarding", "what is the sign up process"],
+    "answer": "To get started with Fine Flow, contact the sales team on +47 32 28 50 00 or email ff.sales@fineflow.com. They will walk you through choosing the right plan for your fleet size, setting up your account and connecting your Gmail inbox. The onboarding process is straightforward and the team will have you up and running quickly.",
+    "follow_up": "How many vehicles are in your fleet? I can point you to the right plan before you reach out."
+  },
+  {
+    "id": "FF-038",
+    "category": "response_time",
+    "keywords": ["response time", "how fast is fineflow", "how quickly does it process", "processing speed", "how long does it take", "time to process a fine", "how fast does it work"],
+    "answer": "Fine Flow monitors your inbox every minute so fines are picked up and processed almost immediately after they arrive. Driver assignment happens automatically once a fine is created. The whole intake and assignment process typically takes seconds. For manual reviews or appeals, the timeline depends on your admin team's response and the issuing authority.",
+    "follow_up": null
+  },
+  {
+    "id": "FF-039",
+    "category": "uk_fines",
+    "keywords": ["uk parking fines", "pcn uk", "uk penalty charge notice", "types of fines uk", "what types of fines", "council fines uk", "uk authorities fines", "what fines does it handle"],
+    "answer": "Fine Flow handles all types of UK fleet fines — Penalty Charge Notices from councils, Fixed Penalty Notices from police, parking fines, bus lane violations, congestion zone charges and other penalty notices. It works with all UK issuing authorities and councils regardless of the type of violation or location.",
+    "follow_up": null
   }
+]
 ]

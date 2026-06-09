@@ -243,7 +243,7 @@
     "keywords": ["how many credits", "credits when subscribe", "plan credits", "credits renew", "add credits", "out of credits", "credit balance", "plan allowance"],
     "answer": "Fine Flow plans include a monthly fine allowance rather than a credit wallet. Each fine processed counts against that allowance. The allowance resets to zero at the start of each billing cycle and unused allowance does not roll over. If you exhaust your allowance, additional fines are charged at the £2.50 overage rate. You can earn bonus credits separately through the referral programme.",
     "follow_up": null
-  }[
+  },
   {
     "id": "FF-001",
     "category": "core_overview",
@@ -517,5 +517,4 @@
     "answer": "Fine Flow handles all types of UK fleet fines — Penalty Charge Notices from councils, Fixed Penalty Notices from police, parking fines, bus lane violations, congestion zone charges and other penalty notices. It works with all UK issuing authorities and councils regardless of the type of violation or location.",
     "follow_up": null
   }
-]
 ]

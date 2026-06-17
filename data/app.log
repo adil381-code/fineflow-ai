@@ -347,3 +347,7 @@ json.decoder.JSONDecodeError: Invalid control character at: line 20 column 436 (
 2026-05-21 09:45:59,272 INFO Index built. Total chunks=8
 2026-05-21 09:46:06,762 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
 2026-05-21 09:46:06,898 INFO ChromaDB index found.
+2026-06-12 17:26:32,187 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-06-12 17:26:32,481 INFO ChromaDB index found.
+2026-06-15 11:10:08,732 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-06-15 11:10:08,949 INFO ChromaDB index found.

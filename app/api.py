@@ -1,23 +1,33 @@
 # app/api.py
 """
-FineFlow Nova API
-- Session IDs generated on frontend and passed with every request
-- Both GET /ask and POST /chat supported
+FineFlow Nova API — Production with MySQL Memory + Ticketing
+==============================================================
+Endpoints:
+  POST /customer          - find or create user by email
+  POST /chat               - send message, get answer (+ ticket popup flag)
+  GET  /history/{user_id}  - load full chat history for a user
+  POST /ticket              - create a support ticket
+
+Guest users: omit user_id (or send 0) — in-memory session only, nothing saved.
+Logged-in users: pass user_id returned from /customer — full MySQL persistence.
 """
 
+import os
 import uuid
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import os
-from pathlib import Path
 
-from app.answer_builder import build_response
+from app.answer_builder import (
+    build_response,
+    db_find_or_create_user,
+    db_load_history,
+    db_create_ticket,
+)
 from app.logger import logger
 from app.retriever import build_index
-from app.ingest import run as run_ingest
 from app.config import CHROMA_DB_DIR
 
 app = FastAPI(title="FineFlow Nova API")
@@ -31,10 +41,31 @@ app.add_middleware(
 )
 
 
-class ChatRequest(BaseModel):
-    message: str
-    session_id: str = ""   # frontend must send this; generated here if missing
+# ─────────────────────────────────────────────────────────────────────────────
+# Request/response models
+# ─────────────────────────────────────────────────────────────────────────────
 
+class CustomerRequest(BaseModel):
+    name:       str
+    email:      str
+    support_id: str = ""
+
+
+class ChatRequest(BaseModel):
+    message:    str
+    user_id:    int = 0      # 0 or omitted = guest (no DB persistence)
+    session_id: str = ""     # used for guest in-memory sessions
+
+
+class TicketRequest(BaseModel):
+    user_id: int = 0
+    subject: str
+    message: str
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Startup
+# ─────────────────────────────────────────────────────────────────────────────
 
 @app.on_event("startup")
 async def startup_event():
@@ -44,8 +75,6 @@ async def startup_event():
             build_index()
         except Exception as e:
             logger.error("Failed to auto-build index: %s", e)
-    else:
-        logger.info("ChromaDB index found.")
 
 
 @app.get("/health")
@@ -53,31 +82,107 @@ def health():
     return {"status": "ok"}
 
 
-@app.get("/ask")
-def ask(q: str = Query(...), session_id: str = Query("")):
-    # If frontend sends no session_id, generate one (stateless fallback)
-    sid = session_id.strip() or str(uuid.uuid4())
-    resp = build_response(q, session_id=sid)
-    resp["session_id"] = sid   # return it so frontend can store it
-    return JSONResponse(resp)
+# ─────────────────────────────────────────────────────────────────────────────
+# POST /customer — find or create user
+# ─────────────────────────────────────────────────────────────────────────────
 
+@app.post("/customer")
+def customer(body: CustomerRequest):
+    """
+    Looks up user by email. Creates if not found.
+    Returns user_id to be used in all subsequent /chat, /history, /ticket calls.
+    """
+    name  = body.name.strip()
+    email = body.email.strip().lower()
+    sid   = body.support_id.strip()
+
+    if not name or not email:
+        raise HTTPException(status_code=400, detail="name and email are required")
+
+    user_id, existed = db_find_or_create_user(name, email, sid)
+
+    if user_id == 0:
+        # MySQL unavailable — fall back to guest mode gracefully
+        return JSONResponse({
+            "user_id": 0,
+            "exists": False,
+            "warning": "Database unavailable — continuing as guest session",
+        })
+
+    return JSONResponse({"user_id": user_id, "exists": existed})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GET /history/{user_id} — load chat history
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/history/{user_id}")
+def history(user_id: int):
+    """
+    Returns full chat history for a logged-in user, oldest to newest.
+    [{"sender": "user", "message": "..."}, {"sender": "bot", "message": "..."}]
+    """
+    if user_id <= 0:
+        return JSONResponse([])
+    rows = db_load_history(user_id, limit=200)
+    return JSONResponse(rows)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# POST /chat — main chat endpoint
+# ─────────────────────────────────────────────────────────────────────────────
 
 @app.post("/chat")
 def chat(body: ChatRequest):
+    """
+    Send a message, get an answer.
+    If user_id > 0: history loaded/saved from MySQL automatically.
+    If user_id == 0: in-memory session only (guest), uses session_id.
+    Returns: { "answer": "...", "trigger_ticket_popup": true|false }
+    """
     sid = body.session_id.strip() or str(uuid.uuid4())
-    resp = build_response(body.message, session_id=sid)
-    resp["session_id"] = sid
-    return JSONResponse(resp)
+    uid = body.user_id if body.user_id and body.user_id > 0 else 0
+
+    # For logged-in users, session_id can just mirror user_id for consistency
+    if uid:
+        sid = f"user_{uid}"
+
+    result = build_response(body.message, session_id=sid, user_id=uid)
+
+    return JSONResponse({
+        "answer":               result.get("answer", ""),
+        "trigger_ticket_popup": result.get("trigger_ticket_popup", False),
+        "session_id":           sid,
+    })
 
 
-@app.post("/admin/ingest")
-def admin_ingest():
-    try:
-        written, skipped = run_ingest()
-        return {"status": "ok", "written": written, "skipped": skipped}
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+# ─────────────────────────────────────────────────────────────────────────────
+# POST /ticket — create support ticket
+# ─────────────────────────────────────────────────────────────────────────────
 
+@app.post("/ticket")
+def ticket(body: TicketRequest):
+    """
+    Creates a support ticket. Called by frontend when trigger_ticket_popup
+    was true and the user fills in the support form.
+    """
+    subject = body.subject.strip()
+    message = body.message.strip()
+
+    if not subject or not message:
+        raise HTTPException(status_code=400, detail="subject and message are required")
+
+    ticket_number = db_create_ticket(body.user_id, subject, message)
+
+    if ticket_number == "TKT-ERR":
+        raise HTTPException(status_code=503, detail="Ticket system temporarily unavailable")
+
+    return JSONResponse({"success": True, "ticket_id": ticket_number})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin
+# ─────────────────────────────────────────────────────────────────────────────
 
 @app.post("/admin/build_index")
 def admin_build_index(force: bool = Query(False)):
@@ -87,6 +192,10 @@ def admin_build_index(force: bool = Query(False)):
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Static / home
+# ─────────────────────────────────────────────────────────────────────────────
 
 static_dir = os.path.join("app", "static")
 if os.path.isdir(static_dir):

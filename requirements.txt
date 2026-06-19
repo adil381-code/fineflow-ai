@@ -7,3 +7,4 @@ requests
 chromadb
 pypdf
 docx2txt
+pymysql

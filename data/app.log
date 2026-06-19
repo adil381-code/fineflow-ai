@@ -351,3 +351,6 @@ json.decoder.JSONDecodeError: Invalid control character at: line 20 column 436 (
 2026-06-12 17:26:32,481 INFO ChromaDB index found.
 2026-06-15 11:10:08,732 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
 2026-06-15 11:10:08,949 INFO ChromaDB index found.
+2026-06-17 17:04:10,254 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-06-17 17:04:10,254 INFO MONGO_URI not set — using in-memory sessions only
+2026-06-17 17:04:10,449 INFO ChromaDB index found.

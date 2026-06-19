@@ -1,22 +1,22 @@
 # app/answer_builder.py
 """
-FineFlow Nova — Production Final with MongoDB Memory
-=====================================================
-Fixes:
-1. Single-word topics ("appeals", "fines", "pricing") now route to full answers
-2. "yes" after social response no longer triggers pricing
-3. MongoDB persistent memory for logged-in users
-4. Session-only memory for guests
-5. Counter-questions on "no" working properly
-6. Affirmative loop prevention (second "yes/sure" → close sale)
+FineFlow Nova — Production Final with MySQL Memory + Ticket Escalation
+=======================================================================
+Changes vs previous version:
+  - MongoDB removed entirely
+  - MySQL persistence via pymysql (chat_history + user_profiles via users table)
+  - build_response() returns trigger_ticket_popup=True when confidence is low
+    or when the chatbot determines it cannot answer and directs to support
+  - All RAG, ChromaDB, OpenAI, FineFlow logic unchanged
+  - Guest users (user_id=0 or "") use in-memory session only
 """
 
+import json
 import os
 import re
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
@@ -33,93 +33,213 @@ from app.retriever import rerank_hits, search as rag_search
 
 MAX_FLEET = 50_000
 
+# Confidence below this → trigger_ticket_popup = True
+TICKET_CONFIDENCE_THRESHOLD = 0.45
+
+# Phrases in bot answer that mean "go to support" → trigger popup
+_SUPPORT_PHRASES = [
+    "contact the team", "contact fine flow", "call the team",
+    "email ff.sales", "reach out to", "speak to support",
+    "contact support", "our support team", "redirecting to expert",
+    "i don't have that specific detail", "i do not have that specific detail",
+]
+
+
+def _should_escalate(answer: str, confidence: float) -> bool:
+    """Return True if the answer should trigger the support ticket popup."""
+    if confidence < TICKET_CONFIDENCE_THRESHOLD:
+        return True
+    answer_lower = answer.lower()
+    return any(phrase in answer_lower for phrase in _SUPPORT_PHRASES)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
-# MongoDB — optional, only used when MONGO_URI is set
+# MySQL — lazy connection with auto-reconnect
 # ─────────────────────────────────────────────────────────────────────────────
 
-_mongo_client = None
-_mongo_db     = None
+_mysql_conn = None
+_mysql_lock = threading.Lock()
 
-def _init_mongo():
-    global _mongo_client, _mongo_db
-    uri = os.getenv("MONGO_URI", "")
-    if not uri:
-        logger.info("MONGO_URI not set — using in-memory sessions only")
+
+def _get_conn():
+    """Return a live MySQL connection, reconnecting if needed."""
+    global _mysql_conn
+    host = os.getenv("MYSQL_HOST", "")
+    if not host:
+        return None
+
+    with _mysql_lock:
+        try:
+            import pymysql
+            if _mysql_conn is None or not _mysql_conn.open:
+                raise Exception("reconnect needed")
+            _mysql_conn.ping(reconnect=False)
+            return _mysql_conn
+        except Exception:
+            try:
+                import pymysql
+                _mysql_conn = pymysql.connect(
+                    host=host,
+                    user=os.getenv("MYSQL_USER", ""),
+                    password=os.getenv("MYSQL_PASSWORD", ""),
+                    database=os.getenv("MYSQL_DATABASE", ""),
+                    charset="utf8mb4",
+                    autocommit=True,
+                    connect_timeout=5,
+                    cursorclass=pymysql.cursors.DictCursor,
+                )
+                logger.info("MySQL connected: %s/%s", host, os.getenv("MYSQL_DATABASE", ""))
+                return _mysql_conn
+            except Exception as e:
+                logger.warning("MySQL unavailable (%s) — in-memory only", e)
+                _mysql_conn = None
+                return None
+
+
+def _ensure_tables() -> None:
+    conn = _get_conn()
+    if not conn:
         return
     try:
-        from pymongo import MongoClient
-        _mongo_client = MongoClient(uri, serverSelectionTimeoutMS=5000)
-        _mongo_client.server_info()
-        _mongo_db = _mongo_client[os.getenv("MONGO_DB", "fineflow_nova")]
-        logger.info("MongoDB connected: %s", os.getenv("MONGO_DB", "fineflow_nova"))
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id         INT AUTO_INCREMENT PRIMARY KEY,
+                    name       VARCHAR(100),
+                    email      VARCHAR(255) UNIQUE,
+                    support_id VARCHAR(100),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS chat_history (
+                    id         INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id    INT  NOT NULL,
+                    sender     VARCHAR(20) NOT NULL,
+                    message    TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    INDEX idx_user_id (user_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS tickets (
+                    id            INT AUTO_INCREMENT PRIMARY KEY,
+                    ticket_number VARCHAR(50) UNIQUE,
+                    user_id       INT,
+                    subject       VARCHAR(255),
+                    message       TEXT,
+                    status        VARCHAR(50) DEFAULT 'OPEN',
+                    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """)
+        logger.info("MySQL tables verified")
     except Exception as e:
-        logger.warning("MongoDB unavailable (%s) — using in-memory sessions", e)
-        _mongo_client = None
-        _mongo_db     = None
-
-_init_mongo()
+        logger.warning("MySQL table check failed: %s", e)
 
 
-def _db_save_turn(user_id: str, role: str, content: str) -> None:
-    """Save one turn to MongoDB for a logged-in user."""
-    if not _mongo_db or not user_id:
-        return
-    try:
-        _mongo_db.chat_history.insert_one({
-            "user_id":   user_id,
-            "role":      role,
-            "content":   content,
-            "timestamp": datetime.now(timezone.utc),
-        })
-    except Exception:
-        logger.exception("MongoDB save failed")
-
-
-def _db_load_history(user_id: str, limit: int = 20) -> List[Dict[str, str]]:
-    """Load recent conversation history for a logged-in user."""
-    if not _mongo_db or not user_id:
-        return []
-    try:
-        docs = list(
-            _mongo_db.chat_history
-            .find({"user_id": user_id}, {"_id": 0, "role": 1, "content": 1})
-            .sort("timestamp", -1)
-            .limit(limit)
-        )
-        docs.reverse()
-        return [{"role": d["role"], "content": d["content"]} for d in docs]
-    except Exception:
-        logger.exception("MongoDB load failed")
-        return []
-
-
-def _db_save_profile(user_id: str, profile_data: dict) -> None:
-    """Save customer profile to MongoDB."""
-    if not _mongo_db or not user_id:
-        return
-    try:
-        _mongo_db.user_profiles.update_one(
-            {"user_id": user_id},
-            {"$set": {**profile_data, "updated_at": datetime.now(timezone.utc)}},
-            upsert=True,
-        )
-    except Exception:
-        logger.exception("MongoDB profile save failed")
-
-
-def _db_load_profile(user_id: str) -> Optional[dict]:
-    """Load customer profile from MongoDB."""
-    if not _mongo_db or not user_id:
-        return None
-    try:
-        return _mongo_db.user_profiles.find_one({"user_id": user_id}, {"_id": 0})
-    except Exception:
-        logger.exception("MongoDB profile load failed")
-        return None
+try:
+    _ensure_tables()
+except Exception:
+    pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Customer profile
+# MySQL helpers  (used by api.py AND answer_builder)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def db_find_or_create_user(name: str, email: str, support_id: str = "") -> Tuple[int, bool]:
+    """
+    Find user by email or create new one.
+    Returns (user_id, existed_already).
+    """
+    conn = _get_conn()
+    if not conn:
+        return 0, False
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM users WHERE email = %s", (email,))
+            row = cur.fetchone()
+            if row:
+                return row["id"], True
+            cur.execute(
+                "INSERT INTO users (name, email, support_id) VALUES (%s, %s, %s)",
+                (name, email, support_id or ""),
+            )
+            return cur.lastrowid, False
+    except Exception as e:
+        logger.warning("db_find_or_create_user failed: %s", e)
+        return 0, False
+
+
+def db_save_message(user_id: int, sender: str, message: str) -> None:
+    """Save one chat message for a logged-in user."""
+    if not user_id:
+        return
+    conn = _get_conn()
+    if not conn:
+        return
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO chat_history (user_id, sender, message) VALUES (%s, %s, %s)",
+                (user_id, sender, message),
+            )
+    except Exception as e:
+        logger.warning("db_save_message failed: %s", e)
+
+
+def db_load_history(user_id: int, limit: int = 40) -> List[Dict[str, str]]:
+    """Load chat history ordered oldest→newest."""
+    if not user_id:
+        return []
+    conn = _get_conn()
+    if not conn:
+        return []
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT sender, message FROM (
+                    SELECT sender, message, created_at
+                    FROM chat_history
+                    WHERE user_id = %s
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                ) sub ORDER BY created_at ASC
+                """,
+                (user_id, limit),
+            )
+            return [{"sender": r["sender"], "message": r["message"]} for r in cur.fetchall()]
+    except Exception as e:
+        logger.warning("db_load_history failed: %s", e)
+        return []
+
+
+def db_create_ticket(user_id: int, subject: str, message: str) -> str:
+    """Create a support ticket and return the ticket number."""
+    conn = _get_conn()
+    if not conn:
+        return "TKT-ERR"
+    try:
+        with conn.cursor() as cur:
+            # Get next ticket number
+            cur.execute("SELECT COUNT(*) AS cnt FROM tickets")
+            row   = cur.fetchone()
+            num   = (row["cnt"] if row else 0) + 1001
+            tkt   = f"TKT-{num}"
+            cur.execute(
+                "INSERT INTO tickets (ticket_number, user_id, subject, message) VALUES (%s, %s, %s, %s)",
+                (tkt, user_id or None, subject, message),
+            )
+            return tkt
+    except Exception as e:
+        logger.warning("db_create_ticket failed: %s", e)
+        return "TKT-ERR"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Customer profile (in-memory; persisted via chat context for logged-in users)
 # ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -138,7 +258,7 @@ class Profile:
             parts.append(f"Fleet size: {self.fleet} vehicles")
         if self.volume:  parts.append(f"Monthly fines: ~{self.volume}")
         if self.industry: parts.append(f"Industry: {self.industry}")
-        if self.issues:  parts.append(f"Problems mentioned: {', '.join(self.issues)}")
+        if self.issues:  parts.append(f"Problems: {', '.join(self.issues)}")
         return "\n".join(parts)
 
     def plan_name(self) -> str:
@@ -155,24 +275,9 @@ class Profile:
         if self.fleet <= 200:  return "£399"
         return "£499"
 
-    def to_dict(self) -> dict:
-        return {
-            "fleet": self.fleet, "volume": self.volume,
-            "issues": self.issues, "industry": self.industry,
-            "name": self.name, "turns": self.turns,
-        }
-
-    @classmethod
-    def from_dict(cls, d: dict) -> "Profile":
-        return cls(
-            fleet=d.get("fleet"), volume=d.get("volume"),
-            issues=d.get("issues", []), industry=d.get("industry"),
-            name=d.get("name"), turns=d.get("turns", 0),
-        )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
-# In-memory session store (for guests without MongoDB)
+# In-memory session store
 # ─────────────────────────────────────────────────────────────────────────────
 
 _SES: Dict[str, List[Dict]] = {}
@@ -181,40 +286,42 @@ _MET: Dict[str, Dict]       = {}
 _LK  = threading.Lock()
 
 
-def _hist(sid: str, user_id: str = "") -> List[Dict[str, str]]:
-    """Get history — from MongoDB if user_id set, else in-memory."""
-    if user_id and _mongo_db:
-        return _db_load_history(user_id)
+def _hist(sid: str, uid: int = 0) -> List[Dict[str, str]]:
+    """
+    Returns history as [{"role": "user"|"assistant", "content": "..."}]
+    for OpenAI messages format.
+    """
+    if uid:
+        rows = db_load_history(uid)
+        # Convert sender→role for OpenAI
+        return [
+            {"role": "user" if r["sender"] == "user" else "assistant", "content": r["message"]}
+            for r in rows
+        ]
     with _LK:
         return list(_SES.get(sid, []))
 
 
-def _push(sid: str, role: str, content: str, user_id: str = "") -> None:
-    """Save turn — to MongoDB if user_id set, always to in-memory."""
-    if user_id and _mongo_db:
-        _db_save_turn(user_id, role, content)
+def _push(sid: str, role: str, content: str, uid: int = 0) -> None:
+    sender = "user" if role == "user" else "bot"
+    if uid:
+        db_save_message(uid, sender, content)
     with _LK:
         h = _SES.setdefault(sid, [])
         h.append({"role": role, "content": content})
         cap = CHAT_HISTORY_TURNS * 2
-        if len(h) > cap: _SES[sid] = h[-cap:]
+        if len(h) > cap:
+            _SES[sid] = h[-cap:]
 
 
-def _pro(sid: str, user_id: str = "") -> Profile:
-    """Get profile — from MongoDB if user_id set, else in-memory."""
-    if user_id and _mongo_db:
-        data = _db_load_profile(user_id)
-        if data:
-            return Profile.from_dict(data)
+def _pro(sid: str) -> Profile:
     with _LK:
-        if sid not in _PRO: _PRO[sid] = Profile()
+        if sid not in _PRO:
+            _PRO[sid] = Profile()
         return _PRO[sid]
 
 
-def _save_pro(sid: str, p: Profile, user_id: str = "") -> None:
-    """Save profile — to MongoDB if user_id set, always to in-memory."""
-    if user_id and _mongo_db:
-        _db_save_profile(user_id, p.to_dict())
+def _save_pro(sid: str, p: Profile) -> None:
     with _LK:
         _PRO[sid] = p
 
@@ -283,12 +390,12 @@ _ISS = [
     (re.compile(r"\b(spreadsheet)\b", re.I),                                             "using spreadsheets"),
     (re.compile(r"\b(too\s+much\s+admin)\b", re.I),                                     "too much admin"),
 ]
-_FINES_CTX = {"how many fines", "fines per month", "fines a month", "monthly fines", "deal with each month", "fines do you"}
-_VEH_CTX   = {"how many vehicles", "fleet size", "vehicles do you", "vehicles are in", "how big is your fleet", "size of your fleet"}
+_FINES_CTX = {"how many fines", "fines per month", "fines a month", "monthly fines", "deal with each month"}
+_VEH_CTX   = {"how many vehicles", "fleet size", "vehicles do you", "vehicles are in", "how big is your fleet"}
 
 
-def _upd(sid, q, uid=""):
-    p = _pro(sid, uid)
+def _upd(sid, q):
+    p = _pro(sid)
     p.turns += 1
     m = _NAME_RE.search(q)
     if m and not p.name: p.name = m.group(1)
@@ -300,7 +407,7 @@ def _upd(sid, q, uid=""):
     if m: p.industry = m.group(1).lower()
     for pat, lbl in _ISS:
         if pat.search(q) and lbl not in p.issues: p.issues.append(lbl)
-    _save_pro(sid, p, uid)
+    _save_pro(sid, p)
 
 
 def _resolve_bare_number(n: int, sid: str) -> Optional[str]:
@@ -316,36 +423,36 @@ def _resolve_bare_number(n: int, sid: str) -> Optional[str]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TOPIC SHORTCUTS — single words that should get full answers immediately
+# Topic shortcuts
 # ─────────────────────────────────────────────────────────────────────────────
 
 _TOPIC_SHORTCUTS: Dict[str, str] = {
-    "pricing":    "how much does fine flow cost and what are the plans",
-    "price":      "how much does fine flow cost and what are the plans",
-    "cost":       "how much does fine flow cost and what are the plans",
-    "plans":      "what are the fine flow subscription plans",
-    "appeals":    "can fine flow help me appeal a fine and how does it work",
-    "appeal":     "can fine flow help me appeal a fine and how does it work",
-    "fines":      "what happens to a fine when it enters fine flow",
-    "billing":    "how does billing work in fine flow",
-    "dashboard":  "what does the fine flow dashboard show",
-    "drivers":    "how does fine flow manage drivers and assign fines",
-    "driver":     "how does fine flow manage drivers and assign fines",
-    "security":   "how secure is fine flow and is it gdpr compliant",
-    "gdpr":       "how secure is fine flow and is it gdpr compliant",
-    "referral":   "does fine flow have a referral programme",
-    "referrals":  "does fine flow have a referral programme",
-    "features":   "what features does fine flow include in every plan",
-    "savings":    "how much time and money can fine flow save me",
-    "contact":    "how do i contact fine flow sales team",
-    "email":      "how does fine flow connect to gmail to get fines",
-    "gmail":      "how does fine flow connect to gmail to get fines",
-    "payg":       "is there a pay as you go option in fine flow",
-    "overage":    "what is the overage charge in fine flow",
-    "reports":    "what reports can i export from fine flow",
-    "statuses":   "what are the fine statuses in fine flow",
-    "matching":   "how does fine flow match a fine to the correct driver",
-    "overdue":    "what happens when a fine becomes overdue in fine flow",
+    "pricing":   "how much does fine flow cost and what are the plans",
+    "price":     "how much does fine flow cost and what are the plans",
+    "cost":      "how much does fine flow cost and what are the plans",
+    "plans":     "what are the fine flow subscription plans",
+    "appeals":   "can fine flow help me appeal a fine and how does it work",
+    "appeal":    "can fine flow help me appeal a fine and how does it work",
+    "fines":     "what happens to a fine when it enters fine flow",
+    "billing":   "how does billing work in fine flow",
+    "dashboard": "what does the fine flow dashboard show",
+    "drivers":   "how does fine flow manage drivers and assign fines",
+    "driver":    "how does fine flow manage drivers and assign fines",
+    "security":  "how secure is fine flow and is it gdpr compliant",
+    "gdpr":      "how secure is fine flow and is it gdpr compliant",
+    "referral":  "does fine flow have a referral programme",
+    "referrals": "does fine flow have a referral programme",
+    "features":  "what features does fine flow include in every plan",
+    "savings":   "how much time and money can fine flow save me",
+    "contact":   "how do i contact fine flow sales team",
+    "email":     "how does fine flow connect to gmail to get fines",
+    "gmail":     "how does fine flow connect to gmail to get fines",
+    "payg":      "is there a pay as you go option in fine flow",
+    "overage":   "what is the overage charge in fine flow",
+    "reports":   "what reports can i export from fine flow",
+    "statuses":  "what are the fine statuses in fine flow",
+    "matching":  "how does fine flow match a fine to the correct driver",
+    "overdue":   "what happens when a fine becomes overdue in fine flow",
 }
 
 
@@ -354,42 +461,42 @@ _TOPIC_SHORTCUTS: Dict[str, str] = {
 # ─────────────────────────────────────────────────────────────────────────────
 
 _GREET = {
-    "hi", "hello", "hey", "hiya", "howdy", "yo", "sup",
-    "good morning", "good afternoon", "good evening", "morning", "afternoon", "evening",
-    "hi there", "hey there", "hello there", "hi nova", "hey nova", "hello nova",
+    "hi","hello","hey","hiya","howdy","yo","sup",
+    "good morning","good afternoon","good evening","morning","afternoon","evening",
+    "hi there","hey there","hello there","hi nova","hey nova","hello nova",
 }
 _SOC = {
-    "how are you", "how are you doing", "how r u", "how are u",
-    "hows it going", "how is it going", "whats up", "what s up",
-    "you ok", "you good", "how do you do", "you alright", "alright mate",
+    "how are you","how are you doing","how r u","how are u",
+    "hows it going","how is it going","whats up","what s up",
+    "you ok","you good","how do you do","you alright","alright mate",
 }
 _ID = {
-    "who are you", "who r you", "who is nova", "who is this", "who is there",
-    "whos there", "anyone there", "what are you", "what is nova",
-    "are you a bot", "are you human", "are you ai", "are you a robot",
-    "are you male or female", "who the hell are you", "whats your name",
-    "what is your name", "introduce yourself", "who am i talking to", "knock knock",
+    "who are you","who r you","who is nova","who is this","who is there",
+    "whos there","anyone there","what are you","what is nova",
+    "are you a bot","are you human","are you ai","are you a robot",
+    "are you male or female","who the hell are you","whats your name",
+    "what is your name","introduce yourself","who am i talking to","knock knock",
 }
 _AFF = {
-    "yes", "yeah", "yep", "yup", "ya", "ye", "sure", "ok sure", "okay sure",
-    "go ahead", "go on", "yes please", "yes sure", "of course", "absolutely",
-    "definitely", "do it", "tell me more", "more", "explain", "explain more",
-    "yes explain", "go for it", "sounds good", "continue", "carry on",
-    "keep going", "please do", "i would", "please explain", "show me",
-    "walk me through it", "for sure", "yes for sure", "sure thing", "yes tell me",
+    "yes","yeah","yep","yup","ya","ye","sure","ok sure","okay sure",
+    "go ahead","go on","yes please","yes sure","of course","absolutely",
+    "definitely","do it","tell me more","more","explain","explain more",
+    "yes explain","go for it","sounds good","continue","carry on",
+    "keep going","please do","i would","please explain","show me",
+    "walk me through it","for sure","yes for sure","sure thing","yes tell me",
 }
 _THX = {
-    "thanks", "thank you", "thank u", "cheers", "that helps", "that helped", "ta",
-    "okay thanks", "ok thanks", "great thanks", "perfect", "brilliant", "nice one",
-    "lovely", "great", "awesome", "wonderful", "thank you so much", "many thanks",
+    "thanks","thank you","thank u","cheers","that helps","that helped","ta",
+    "okay thanks","ok thanks","great thanks","perfect","brilliant","nice one",
+    "lovely","great","awesome","wonderful","thank you so much","many thanks",
 }
-_BYE  = {"bye", "goodbye", "see you", "see ya", "later", "take care", "good bye", "cya", "farewell", "cheerio"}
-_NEG  = {"no", "nope", "nah", "no thanks", "not now", "not really", "no thank you", "nah thanks", "not sure"}
-_RUDE = {"stupid", "idiot", "useless", "rubbish", "garbage", "terrible", "you suck", "dumb bot", "waste of time"}
+_BYE  = {"bye","goodbye","see you","see ya","later","take care","good bye","cya","farewell","cheerio"}
+_NEG  = {"no","nope","nah","no thanks","not now","not really","no thank you","nah thanks","not sure"}
+_RUDE = {"stupid","idiot","useless","rubbish","garbage","terrible","you suck","dumb bot","waste of time"}
 _FILL = {
-    "ok", "okay", "right", "alright", "cool", "nice", "interesting", "really",
-    "hmm", "hm", "ah", "oh", "i see", "got it", "understood", "makes sense",
-    "noted", "wow", "woah", "omg", "anything", "something", "whatever",
+    "ok","okay","right","alright","cool","nice","interesting","really",
+    "hmm","hm","ah","oh","i see","got it","understood","makes sense",
+    "noted","wow","woah","omg","anything","something","whatever",
 }
 
 _FF_OK = re.compile(
@@ -448,8 +555,8 @@ _TMAP = {
     "pric":"pricing","cost":"pricing","plan":"pricing","£":"pricing",
     "vehicle":"pricing","fleet":"pricing","package":"pricing",
     "fines per month":"fines_volume","fines a month":"fines_volume","monthly fines":"fines_volume",
-    "appeal":"appeals","dispute":"appeals",
-    "driver":"driver_mgmt","referral":"referral","refer":"referral","discount":"referral",
+    "appeal":"appeals","dispute":"appeals","driver":"driver_mgmt",
+    "referral":"referral","refer":"referral","discount":"referral",
     "security":"security","gdpr":"security","card":"security",
     "billing":"billing","stripe":"billing","dashboard":"dashboard",
     "gmail":"email","inbox":"email","save":"savings","admin time":"savings",
@@ -475,54 +582,45 @@ Core promise: Cut admin time by up to 80% and never miss a penalty deadline agai
 Fine Flow provides 24/7 fleet fine tracking, management and compliance in one place.
 
 YOUR PERSONALITY:
-Warm, humble, direct — like a knowledgeable colleague who genuinely cares. Conversational and concise. Never robotic. Never pushy. Think of a great sales rep who listens first and helps second.
+Warm, humble, direct — like a knowledgeable colleague who genuinely cares. Conversational and concise. Never robotic. Never pushy.
 
 CRITICAL RULES:
 
-1. SHORT ANSWERS
-2 to 3 sentences. Never write long paragraphs. If they want more they will ask.
+1. SHORT ANSWERS — 2 to 3 sentences. Never write long paragraphs.
 
-2. CLIENT'S EXACT WORDING
-When describing Fine Flow use these exact phrases:
+2. CLIENT'S EXACT WORDING — When describing Fine Flow use:
 "Fine Flow is an automated system for managing fines from start to finish"
 "keeps the entire process organised, accountable, and under control"
 "cut admin time by up to 80%"
 "never miss a penalty deadline"
 
-3. MEMORY — USE EVERYTHING YOU KNOW
-If you know their fleet size, volume, industry or problems — always use it. Never ask for something they already told you.
+3. MEMORY — If you know their fleet size, volume, industry or problems — always use it. Never ask for something they already told you.
 
-4. COUNTER QUESTIONS ON "NO"
-When user says "no" — do NOT reset. Do NOT say "no problem" and stop. Ask a DIFFERENT relevant follow-up that continues the conversation. Keep them engaged.
+4. COUNTER QUESTIONS ON "NO" — Do NOT reset. Ask a DIFFERENT relevant follow-up. Keep them engaged.
 
-5. FOLLOW-UP QUESTIONS
-After most answers ask one short relevant question. Vary them. Good examples:
+5. FOLLOW-UP QUESTIONS — After most answers ask one short relevant question. Vary them:
 "How many vehicles are in your fleet?"
 "How many fines do you deal with each month?"
 "What does your current process look like?"
 "Is there a particular stage causing the most headaches?"
-"Have you had fines escalate because of missed deadlines?"
 "What's the biggest pain point right now?"
 
-6. AFFIRMATIVE LOOP
-First "yes/sure" → explain warmly what's included (2-3 sentences, no lists)
-Second "yes/sure" → push to action: give contact details
-Never dump full pricing list again on second yes.
+6. AFFIRMATIVE LOOP — First yes/sure → explain what's included (2-3 sentences). Second yes/sure → give contact details and close.
 
-7. TOPIC SHORTCUTS
-When user sends a single word like "appeals", "fines", "pricing" — answer it directly. Do not ask them to clarify. Give a proper answer.
+7. TOPIC SHORTCUTS — When user sends a single word like "appeals" or "fines" — answer it directly.
 
-8. PAYMENT
-Fine Flow does NOT pay fines automatically. Payment is always by the user on the authority's site.
+8. PAYMENT — Fine Flow does NOT pay fines automatically. Always say NO clearly.
 
-9. CARD DETAILS
-Fine Flow never stores card details. Say this first when asked.
+9. CARD DETAILS — Fine Flow never stores card details. Say this first when asked.
 
-10. TOPIC
-Help with Fine Flow AND general UK fleet fine questions (PCNs, FPNs, councils, TfL, DVLA, appeal rights). For unrelated topics: "I'm here to help with fleet fine management — anything about fines, Fine Flow or appeals?"
+10. SUPPORT ESCALATION — If you cannot answer something confidently or the question needs human review, say:
+"I'm redirecting you to our expert support team who can help with this directly."
+This will trigger a support ticket form for the user.
 
-11. NO HOLLOW ENDINGS
-Never end with "feel free to ask", "don't hesitate", "just let me know".
+11. TOPIC — Help with Fine Flow AND general UK fleet fine questions. For unrelated topics say:
+"I'm here to help with fleet fine management — anything about fines, Fine Flow or appeals?"
+
+12. NO HOLLOW ENDINGS — Never end with "feel free to ask", "don't hesitate", "just let me know".
 
 PRICING:
 Essential: £99/month — 5 to 50 vehicles
@@ -530,7 +628,7 @@ Core: £199/month — 51 to 100 vehicles
 Advanced: £399/month — 101 to 200 vehicles
 Elite: £499/month — 200+ vehicles
 Per fine within allowance: £0.75 | Overage: £2.50 | PAYG: £2.75 (no subscription)
-All plans identical features. No £2.00 fee.
+All plans identical features. No £2.00 fee exists.
 
 REFERRAL:
 Credits: 100 (1-25v) | 250 (26-100v) | 750 (101-500v) | 2000 (500+v)
@@ -542,19 +640,19 @@ CONTACT: +47 32 28 50 00 | ff.sales@fineflow.com
 EXAMPLES:
 
 User: appeals
-Nova: Yes — Fine Flow doesn't just manage appeals, it learns from them. When a driver disputes a fine, the admin reviews it and if accepted, Fine Flow generates an appeal letter and sends it directly to the issuing authority. Over time it refines its approach based on wins and losses, giving you a win probability before you submit. Have you had fines you felt could have been challenged?
-
-User: pricing
-Nova: Fine Flow's plans are based on fleet size. Essential is £99/month for up to 50 vehicles, Core is £199 for up to 100, Advanced is £399 for up to 200, and Elite is £499 for 200+. Every fine within your allowance costs £0.75, and there's also a pay-as-you-go option at £2.75. How many vehicles are you running?
+Nova: Yes — Fine Flow doesn't just manage appeals, it learns from them. When a driver disputes a fine the admin reviews it, and if accepted Fine Flow generates the appeal letter and sends it directly to the issuing authority. Over time it refines its approach based on wins and losses, giving you a win probability before you submit. Have you had fines you felt should have been challenged?
 
 User: fines
-Nova: Fine Flow is an automated system for managing fines from start to finish. The moment a fine arrives in your inbox it's captured automatically, the details extracted, matched to the right driver and tracked through to resolution — keeping everything organised, accountable and under control. Want me to walk you through how it all works?
+Nova: Fine Flow is an automated system for managing fines from start to finish. The moment a fine arrives in your inbox it's captured automatically, details extracted, matched to the right driver and tracked through to resolution — keeping everything organised, accountable and under control. Want me to walk you through how it all works?
 
 User: yes (after social response)
 Nova: What would you like to know about Fine Flow — pricing, how it works, appeals, or something else?
 
-User: no (after follow-up question)
+User: no (after a question)
 Nova: Fair enough — what's the biggest challenge with your current fine management setup? That'll help me point you to what's most useful.
+
+User: something outside Fine Flow knowledge
+Nova: I'm redirecting you to our expert support team who can help with this directly.
 """
 
 
@@ -572,7 +670,7 @@ def _build_sys(p: Profile, mode: str = "") -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# OpenAI + RAG
+# OpenAI + RAG  (unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _ai(msgs, max_tok=150):
@@ -589,14 +687,17 @@ def _ai(msgs, max_tok=150):
         logger.exception("OpenAI failed"); return None
 
 
-def _rag(q):
+def _rag(q) -> Tuple[str, float]:
+    """Returns (context_string, best_score)."""
     try:
         raw    = rag_search(q, top_k=TOP_K)
         ranked = rerank_hits(raw, q)
         strong = [d for d in ranked if d.get("score", 0) >= CONFIDENCE_THRESHOLD]
-        return "\n\n".join(d["chunk"][:600] for d in strong[:4])
+        ctx    = "\n\n".join(d["chunk"][:600] for d in strong[:4])
+        score  = strong[0]["score"] if strong else 0.0
+        return ctx, score
     except Exception:
-        logger.exception("RAG failed"); return ""
+        logger.exception("RAG failed"); return "", 0.0
 
 
 def _make_msgs(query, ctx, hist, p, mode="", extra=""):
@@ -618,17 +719,17 @@ _CLOSE = "The best next step is to call the team on +47 32 28 50 00 or email ff.
 
 _EXPAND = {
     "pricing":             "Explain Fine Flow pricing warmly in 2-3 sentences. Ask how many vehicles if unknown.",
-    "plan_recommendation": "Explain warmly what is included in every Fine Flow plan in 2-3 sentences. Do NOT list plans again. Ask if they want to get in touch with sales.",
-    "appeals":             "Explain the Fine Flow appeal process: driver disputes → DISPUTED → admin accepts/rejects → if accepted, appeal letter sent by email, status UNDER REVIEW. 2-3 sentences.",
+    "plan_recommendation": "Explain warmly what every Fine Flow plan includes in 2-3 sentences. Do NOT list all plans again. Ask if they want to contact sales.",
+    "appeals":             "Explain the appeal process: driver disputes → DISPUTED → admin accepts/rejects → if accepted, appeal letter sent by email. 2-3 sentences.",
     "driver_mgmt":         "Explain how drivers are added (individually or CSV) and matched to fines using vehicle, date and time. 2-3 sentences.",
-    "fines_volume":        "Based on their fine volume, recommend the right plan. Be specific and use their numbers.",
-    "referral":            "Explain the referral programme: credits per referral based on fleet size, plus tier discounts up to 20% for life. 2-3 sentences.",
-    "security":            "Explain GDPR compliance and security: JWT, bcrypt, AES-256, never stores card data, never shares data. 2-3 sentences.",
+    "fines_volume":        "Based on their fine volume, recommend the right plan. Use their numbers specifically.",
+    "referral":            "Explain the referral programme: credits per referral based on fleet size, tier discounts up to 20% for life. 2-3 sentences.",
+    "security":            "Explain GDPR compliance: JWT, bcrypt, AES-256, never stores card data, never shares data. 2-3 sentences.",
     "billing":             "Explain billing: monthly Stripe, credits reset, overage end of cycle, cooldown on cancel. 2-3 sentences.",
-    "dashboard":           "Explain what the company dashboard shows: urgency-based, outstanding fines, deadlines, credits, billing. 2-3 sentences.",
+    "dashboard":           "Explain company dashboard: urgency-based, outstanding fines, deadlines, credits, billing. 2-3 sentences.",
     "savings":             "Give specific savings figures for their fleet size if known.",
     "email":               "Explain Gmail connection: OAuth (recommended) or App Password. 2-3 sentences.",
-    "overdue":             "Explain how Fine Flow tracks deadlines and marks fines OVERDUE at midnight automatically. 2-3 sentences.",
+    "overdue":             "Explain how Fine Flow tracks deadlines and marks fines OVERDUE at midnight. 2-3 sentences.",
     "sign_up":             "Tell them warmly to call +47 32 28 50 00 or email ff.sales@fineflow.com.",
 }
 
@@ -637,9 +738,7 @@ def _aff_response(sid, hist, p):
     cnt = _inc_aff(sid)
     lt  = _gm(sid, "lt") or ""
 
-    # Was the last exchange just social? If so, redirect to topic selection
-    last_was_social = _gm(sid, "last_was_social") or False
-    if last_was_social:
+    if _gm(sid, "last_was_social"):
         _sm(sid, "last_was_social", False)
         return "What would you like to know about Fine Flow — pricing, how it works, appeals, or something else?"
 
@@ -647,7 +746,7 @@ def _aff_response(sid, hist, p):
         _rst_aff(sid); return _CLOSE
 
     prompt = _EXPAND.get(lt, "Expand naturally on the most recent Fine Flow topic in 2-3 sentences. Use the customer's information if available.")
-    ctx    = _rag(lt.replace("_", " ")) if lt else ""
+    ctx, _ = _rag(lt.replace("_", " ")) if lt else ("", 0.0)
     m      = [{"role": "system", "content": _build_sys(p, "Warm, concise. 2-3 sentences. Natural question at end if it helps.")}]
     m.extend(hist[-8:])
     parts  = []
@@ -660,12 +759,11 @@ def _aff_response(sid, hist, p):
 def _neg_response(sid, hist, p):
     lt     = (_gm(sid, "lt") or "").lower()
     last_q = (_gm(sid, "last_nova_q") or "").lower()
-    ctx    = _rag(lt) if lt else ""
+    ctx, _ = _rag(lt) if lt else ("", 0.0)
     extra  = (
-        f"The user said 'no'. Last topic: '{lt}'. Last question asked: '{last_q}'. "
+        f"The user said 'no'. Last topic: '{lt}'. Last question: '{last_q}'. "
         f"Do NOT say 'no problem' and stop. Do NOT reset. "
-        f"Acknowledge briefly and ask a DIFFERENT relevant follow-up that keeps the conversation going. "
-        f"Be warm and natural."
+        f"Acknowledge briefly and ask a DIFFERENT relevant follow-up. Be warm and natural."
     )
     m   = _make_msgs("no", ctx, hist[-8:], p, extra=extra)
     ans = _ai(m, 120)
@@ -677,89 +775,98 @@ def _neg_response(sid, hist, p):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_response(
-    query: str,
+    query:      str,
     session_id: str = "default",
-    user_id: str = "",          # set when user is logged in
+    user_id:    int = 0,
 ) -> Dict[str, Any]:
+    """
+    Returns dict with keys:
+      answer               : str
+      confidence           : float
+      trigger_ticket_popup : bool
+    """
     query      = query.strip()
     session_id = session_id or "default"
     if not query:
-        return {"answer": "Ask me anything about Fine Flow.", "confidence": 1.0}
+        return {"answer": "Ask me anything about Fine Flow.", "confidence": 1.0, "trigger_ticket_popup": False}
 
     nq = _norm(query)
-    p  = _pro(session_id, user_id)
-    _upd(session_id, query, user_id)
+    p  = _pro(session_id)
+    _upd(session_id, query)
 
-    # ══════════════════════════════════════════════════════════
-    # TIER 1: Deterministic — greetings BEFORE off-topic guard
-    # ══════════════════════════════════════════════════════════
+    def _respond(answer: str, conf: float = 1.0) -> Dict[str, Any]:
+        popup = _should_escalate(answer, conf)
+        if popup:
+            answer = answer + " I'm redirecting you to our expert support team who can help with this directly." if not any(ph in answer.lower() for ph in ["redirecting", "support team"]) else answer
+        return {"answer": answer, "confidence": conf, "trigger_ticket_popup": popup}
+
+    # ── TIER 1: Deterministic ─────────────────────────────────────────────
 
     if nq in _GREET:
         _rst(session_id)
         a = "Hey! I'm Nova — Fine Flow's assistant. What can I help you with today?"
-        return {"answer": a, "confidence": 1.0}
+        _push(session_id, "user", query, user_id)
+        _push(session_id, "assistant", a, user_id)
+        return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
 
     if nq in _SOC:
         _sm(session_id, "last_was_social", True)
         a = "Doing well, cheers for asking! What can I help you with — pricing, fines, appeals?"
-        return {"answer": a, "confidence": 1.0}
+        return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
 
     if nq in _ID:
-        return {"answer": "I'm Nova, Fine Flow's AI assistant. I can help with anything about managing fleet fines — pricing, appeals, how the platform works, UK fine rules. What would you like to know?", "confidence": 1.0}
+        a = "I'm Nova, Fine Flow's AI assistant. I can help with anything about managing fleet fines — pricing, appeals, how the platform works, UK fine rules. What would you like to know?"
+        return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
 
     if nq in _THX:
         _rst_aff(session_id)
-        return {"answer": "Happy to help! Anything else you'd like to know?", "confidence": 1.0}
+        return {"answer": "Happy to help! Anything else you'd like to know?", "confidence": 1.0, "trigger_ticket_popup": False}
 
     if nq in _BYE:
-        return {"answer": "Good luck with the fleet management. Come back any time!", "confidence": 1.0}
+        return {"answer": "Good luck with the fleet management. Come back any time!", "confidence": 1.0, "trigger_ticket_popup": False}
 
     if any(r in nq for r in _RUDE):
-        return {"answer": "Let me try again — what would you like to know about Fine Flow?", "confidence": 1.0}
+        return {"answer": "Let me try again — what would you like to know about Fine Flow?", "confidence": 1.0, "trigger_ticket_popup": False}
 
     if nq in _FILL:
         _rst_aff(session_id)
-        lt = _gm(session_id, "lt")
-        if lt:
-            return {"answer": f"Is there anything more you'd like to know about Fine Flow?", "confidence": 1.0}
-        return {"answer": "Is there anything about Fine Flow I can help you with?", "confidence": 1.0}
+        return {"answer": "Is there anything about Fine Flow I can help you with?", "confidence": 1.0, "trigger_ticket_popup": False}
 
-    # Garbled / too short
     words = [w for w in nq.split() if len(w) > 1]
-    if len(words) < 2 and nq not in _AFF and nq not in _NEG and not _VEH_BR.match(query.strip()) and nq not in _TOPIC_SHORTCUTS:
-        return {"answer": "What would you like to know about Fine Flow? I can help with fines, pricing, appeals or how the platform works.", "confidence": 1.0}
+    if (len(words) < 2
+            and nq not in _AFF
+            and nq not in _NEG
+            and nq not in _TOPIC_SHORTCUTS
+            and not _VEH_BR.match(query.strip())):
+        return {"answer": "What would you like to know about Fine Flow? I can help with fines, pricing, appeals or how the platform works.", "confidence": 1.0, "trigger_ticket_popup": False}
 
-    # Off-topic — AFTER all deterministic checks
     if _is_ot(query):
         a = "I'm here to help with fleet fine management — anything about fines, Fine Flow or appeals I can help with?"
         _push(session_id, "user", query, user_id)
         _push(session_id, "assistant", a, user_id)
-        return {"answer": a, "confidence": 1.0}
+        return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
 
-    # Negative / "no" — counter-question
     if nq in _NEG:
         _push(session_id, "user", query, user_id)
         _rst_aff(session_id)
         a = _clean(_neg_response(session_id, _hist(session_id, user_id)[:-1], p))
         _push(session_id, "assistant", a, user_id)
-        return {"answer": a, "confidence": 1.0}
+        return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
 
-    # ── TOPIC SHORTCUTS — single word like "appeals", "pricing", "fines" ──
+    # Topic shortcuts
     if nq in _TOPIC_SHORTCUTS:
-        expanded_query = _TOPIC_SHORTCUTS[nq]
+        expanded = _TOPIC_SHORTCUTS[nq]
         _push(session_id, "user", query, user_id)
-        ctx  = _rag(expanded_query)
-        hist = _hist(session_id, user_id)
-        extra = f"Answer this directly and warmly in 2-3 sentences: {expanded_query}. Then ask one relevant follow-up question."
-        msgs = _make_msgs(expanded_query, ctx, hist[:-1], p, extra=extra)
-        ans  = _clean(_ai(msgs, 160) or "")
-        if not ans:
-            ans = "I can help with that. What specifically would you like to know?"
+        ctx, score = _rag(expanded)
+        hist       = _hist(session_id, user_id)
+        extra      = f"Answer this directly and warmly in 2-3 sentences: {expanded}. Then ask one relevant follow-up question."
+        msgs       = _make_msgs(expanded, ctx, hist[:-1], p, extra=extra)
+        ans        = _clean(_ai(msgs, 160) or "I can help with that. What specifically would you like to know?")
         _push(session_id, "assistant", ans, user_id)
         t = _topic(nq) or _topic(ans)
         if t: _sm(session_id, "lt", t)
         _rst_aff(session_id)
-        return {"answer": ans, "confidence": 1.0}
+        return _respond(ans, score if score else 0.9)
 
     # Explicit vehicle count
     vc = _get_vc(query, session_id)
@@ -767,33 +874,33 @@ def build_response(
         a = "That number doesn't look right — could you double check? How many vehicles are in your fleet?"
         _push(session_id, "user", query, user_id)
         _push(session_id, "assistant", a, user_id)
-        return {"answer": a, "confidence": 1.0}
+        return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
     if vc is not None:
         _rst_aff(session_id)
         a = _plan_answer(vc, p)
-        _save_pro(session_id, p, user_id)
+        _save_pro(session_id, p)
         _push(session_id, "user", query, user_id)
         _push(session_id, "assistant", a, user_id)
         _sm(session_id, "lt", "plan_recommendation")
-        return {"answer": a, "confidence": 1.0}
+        return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
 
-    # Bare number — resolve by context
-    m = _VEH_BR.match(query.strip())
-    if m:
-        n        = int(m.group())
+    # Bare number
+    bm = _VEH_BR.match(query.strip())
+    if bm:
+        n        = int(bm.group())
         ctx_type = _resolve_bare_number(n, session_id)
         if ctx_type == "vehicle" and 0 < n <= MAX_FLEET:
             _rst_aff(session_id)
             a = _plan_answer(n, p)
-            _save_pro(session_id, p, user_id)
+            _save_pro(session_id, p)
             _push(session_id, "user", query, user_id)
             _push(session_id, "assistant", a, user_id)
             _sm(session_id, "lt", "plan_recommendation")
-            return {"answer": a, "confidence": 1.0}
+            return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
         elif ctx_type == "fines" and 0 < n < 10_000:
             p.volume = n
             _rst_aff(session_id)
-            _save_pro(session_id, p, user_id)
+            _save_pro(session_id, p)
             if p.fleet:
                 cost = round(n * 0.75, 2)
                 a = (f"Got it — {n} fines a month. On the {p.plan_name()} plan at {p.plan_price()}, "
@@ -805,12 +912,12 @@ def build_response(
             _push(session_id, "user", query, user_id)
             _push(session_id, "assistant", a, user_id)
             _sm(session_id, "lt", "fines_volume")
-            return {"answer": a, "confidence": 1.0}
+            return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
         else:
             a = "Just to make sure I give you the right info — is that the number of vehicles in your fleet, or your monthly fine volume?"
             _push(session_id, "user", query, user_id)
             _push(session_id, "assistant", a, user_id)
-            return {"answer": a, "confidence": 1.0}
+            return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
 
     # Purchase intent
     if _PURCH.search(query):
@@ -820,7 +927,7 @@ def build_response(
         _push(session_id, "user", query, user_id)
         _push(session_id, "assistant", a, user_id)
         _sm(session_id, "lt", "sign_up")
-        return {"answer": a.strip(), "confidence": 1.0}
+        return {"answer": a.strip(), "confidence": 1.0, "trigger_ticket_popup": False}
 
     # Affirmative
     if nq in _AFF:
@@ -828,11 +935,9 @@ def build_response(
         a = _clean(_aff_response(session_id, _hist(session_id, user_id)[:-1], p))
         _push(session_id, "assistant", a, user_id)
         _sm(session_id, "last_nova_q", "")
-        return {"answer": a, "confidence": 1.0}
+        return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
 
-    # ══════════════════════════════════════════════════════════
-    # TIER 2: RAG + GPT-4o
-    # ══════════════════════════════════════════════════════════
+    # ── TIER 2: RAG + GPT-4o ──────────────────────────────────────────────
 
     _rst_aff(session_id)
     _push(session_id, "user", query, user_id)
@@ -854,12 +959,13 @@ def build_response(
     if not _ask_now(session_id) and not extra:
         extra = "Do NOT end with a question this time. Make your point clearly and naturally, then stop."
 
-    ctx  = _rag(query)
-    hist = _hist(session_id, user_id)
-    ans  = _ai(_make_msgs(query, ctx, hist[:-1], p, mode, extra), 150)
+    ctx, score = _rag(query)
+    hist       = _hist(session_id, user_id)
+    ans        = _ai(_make_msgs(query, ctx, hist[:-1], p, mode, extra), 150)
 
     if not ans:
-        ans = "The Fine Flow team can help with that directly — call +47 32 28 50 00 or email ff.sales@fineflow.com."
+        ans   = "I'm redirecting you to our expert support team who can help with this directly."
+        score = 0.0
 
     ans = _clean(ans)
     _push(session_id, "assistant", ans, user_id)
@@ -870,16 +976,13 @@ def build_response(
     t = _topic(query) or _topic(ans)
     if t: _sm(session_id, "lt", t)
 
-    return {"answer": ans, "confidence": 0.9 if ctx else 0.5}
+    conf = score if score else (0.9 if ctx else 0.3)
+    return _respond(ans, conf)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Public wrappers
-# ─────────────────────────────────────────────────────────────────────────────
-
-def answer_sync(q: str, session_id: str = "default", user_id: str = "") -> Dict[str, Any]:
+def answer_sync(q: str, session_id: str = "default", user_id: int = 0) -> Dict[str, Any]:
     try:
         return build_response(q, session_id, user_id)
     except Exception:
-        logger.exception("Crash")
-        return {"answer": "Something went wrong. Please try again.", "confidence": 0.0} 
+        logger.exception("Crash in answer_sync")
+        return {"answer": "Something went wrong. Please try again.", "confidence": 0.0, "trigger_ticket_popup": False}

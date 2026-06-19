@@ -133,26 +133,41 @@ def history(user_id: int):
 # ─────────────────────────────────────────────────────────────────────────────
 
 @app.get("/ask")
-def chat(body: ChatRequest):
+def chat(
+    q: str = Query(...),
+    session_id: str = Query(""),
+    user_id: int = Query(0)
+):
     """
-    Send a message, get an answer.
-    If user_id > 0: history loaded/saved from MySQL automatically.
-    If user_id == 0: in-memory session only (guest), uses session_id.
-    Returns: { "answer": "...", "trigger_ticket_popup": true|false }
-    """
-    sid = body.session_id.strip() or str(uuid.uuid4())
-    uid = body.user_id if body.user_id and body.user_id > 0 else 0
+    Frontend compatibility endpoint.
 
-    # For logged-in users, session_id can just mirror user_id for consistency
+    Accepts:
+    GET /ask?q=hello&session_id=abc123
+
+    Returns:
+    {
+      "answer": "...",
+      "trigger_ticket_popup": false,
+      "session_id": "abc123"
+    }
+    """
+
+    sid = session_id.strip() or str(uuid.uuid4())
+    uid = user_id if user_id > 0 else 0
+
     if uid:
         sid = f"user_{uid}"
 
-    result = build_response(body.message, session_id=sid, user_id=uid)
+    result = build_response(
+        q,
+        session_id=sid,
+        user_id=uid
+    )
 
     return JSONResponse({
-        "answer":               result.get("answer", ""),
+        "answer": result.get("answer", ""),
         "trigger_ticket_popup": result.get("trigger_ticket_popup", False),
-        "session_id":           sid,
+        "session_id": sid,
     })
 
 

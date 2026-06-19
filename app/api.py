@@ -4,7 +4,7 @@ FineFlow Nova API — Production with MySQL Memory + Ticketing
 ==============================================================
 Endpoints:
   POST /customer          - find or create user by email
-  POST /chat               - send message, get answer (+ ticket popup flag)
+  POST /ask               - send message, get answer (+ ticket popup flag)
   GET  /history/{user_id}  - load full chat history for a user
   POST /ticket              - create a support ticket
 
@@ -90,7 +90,7 @@ def health():
 def customer(body: CustomerRequest):
     """
     Looks up user by email. Creates if not found.
-    Returns user_id to be used in all subsequent /chat, /history, /ticket calls.
+    Returns user_id to be used in all subsequent /ask, /history, /ticket calls.
     """
     name  = body.name.strip()
     email = body.email.strip().lower()
@@ -129,10 +129,10 @@ def history(user_id: int):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# POST /chat — main chat endpoint
+# POST /ask — main chat endpoint
 # ─────────────────────────────────────────────────────────────────────────────
 
-@app.post("/chat")
+@app.post("/ask")
 def chat(body: ChatRequest):
     """
     Send a message, get an answer.

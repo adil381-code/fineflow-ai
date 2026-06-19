@@ -357,3 +357,6 @@ json.decoder.JSONDecodeError: Invalid control character at: line 20 column 436 (
 2026-06-19 09:58:19,596 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
 2026-06-19 14:57:18,010 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
 2026-06-19 14:57:18,013 WARNING MySQL unavailable (No module named 'pymysql') — in-memory only
+2026-06-19 14:58:00,080 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-06-19 14:58:01,327 INFO MySQL connected: in2.fcomet.com/mradevel_fineflow_memory
+2026-06-19 14:58:02,011 INFO MySQL tables verified

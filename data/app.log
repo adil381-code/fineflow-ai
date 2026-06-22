@@ -368,3 +368,9 @@ json.decoder.JSONDecodeError: Invalid control character at: line 20 column 436 (
 2026-06-19 15:37:44,548 INFO MySQL tables verified
 2026-06-22 10:44:48,332 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
 2026-06-22 10:44:50,420 INFO MySQL connected
+2026-06-22 11:10:10,742 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-06-22 11:10:11,824 INFO MySQL connected
+2026-06-22 11:10:45,057 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-06-22 11:10:46,236 INFO MySQL connected
+2026-06-22 15:16:44,283 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-06-22 15:16:46,964 INFO MySQL connected

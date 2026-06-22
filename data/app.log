@@ -360,3 +360,9 @@ json.decoder.JSONDecodeError: Invalid control character at: line 20 column 436 (
 2026-06-19 14:58:00,080 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
 2026-06-19 14:58:01,327 INFO MySQL connected: in2.fcomet.com/mradevel_fineflow_memory
 2026-06-19 14:58:02,011 INFO MySQL tables verified
+2026-06-19 15:21:40,009 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-06-19 15:21:41,154 INFO MySQL connected: in2.fcomet.com/mradevel_fineflow_memory
+2026-06-19 15:21:41,816 INFO MySQL tables verified
+2026-06-19 15:37:42,512 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-06-19 15:37:43,851 INFO MySQL connected: in2.fcomet.com/mradevel_fineflow_memory
+2026-06-19 15:37:44,548 INFO MySQL tables verified

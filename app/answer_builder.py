@@ -1,14 +1,15 @@
 # app/answer_builder.py
 """
-FineFlow Nova — Production Final with MySQL Memory + Ticket Escalation
-=======================================================================
-Changes vs previous version:
-  - MongoDB removed entirely
-  - MySQL persistence via pymysql (chat_history + user_profiles via users table)
-  - build_response() returns trigger_ticket_popup=True when confidence is low
-    or when the chatbot determines it cannot answer and directs to support
-  - All RAG, ChromaDB, OpenAI, FineFlow logic unchanged
-  - Guest users (user_id=0 or "") use in-memory session only
+FineFlow Nova — Production Final (Clean)
+=========================================
+Fixes in this version:
+1. trigger_ticket_popup ONLY fires when confidence < 0.35 AND no RAG context found
+   — no longer fires on good answers that happen to mention contact details
+2. Bare numbers (54, 43) with NO prior context → ask what they mean, don't guess
+3. Counter-questions on "no" / "what?" / frustrated messages work correctly
+4. Memory carries fleet size, volume, name, industry across the full conversation
+5. Client's exact wording used throughout
+6. Escalation message is clean — it does NOT append "redirecting" to good answers
 """
 
 import json
@@ -33,28 +34,26 @@ from app.retriever import rerank_hits, search as rag_search
 
 MAX_FLEET = 50_000
 
-# Confidence below this → trigger_ticket_popup = True
-TICKET_CONFIDENCE_THRESHOLD = 0.45
-
-# Phrases in bot answer that mean "go to support" → trigger popup
-_SUPPORT_PHRASES = [
-    "contact the team", "contact fine flow", "call the team",
-    "email ff.sales", "reach out to", "speak to support",
-    "contact support", "our support team", "redirecting to expert",
-    "i don't have that specific detail", "i do not have that specific detail",
-]
+# Only trigger ticket popup when RAG finds NOTHING and confidence is very low
+TICKET_TRIGGER_THRESHOLD = 0.35
 
 
-def _should_escalate(answer: str, confidence: float) -> bool:
-    """Return True if the answer should trigger the support ticket popup."""
-    if confidence < TICKET_CONFIDENCE_THRESHOLD:
-        return True
-    answer_lower = answer.lower()
-    return any(phrase in answer_lower for phrase in _SUPPORT_PHRASES)
+def _should_escalate(answer: str, confidence: float, has_rag_context: bool) -> bool:
+    """
+    Returns True ONLY when the bot genuinely has no knowledge to help.
+    Does NOT trigger just because the answer mentions contact details.
+    """
+    # Good answers never trigger escalation
+    if confidence >= TICKET_TRIGGER_THRESHOLD:
+        return False
+    if has_rag_context:
+        return False
+    # Only trigger when we have very low confidence AND no RAG context
+    return confidence < TICKET_TRIGGER_THRESHOLD and not has_rag_context
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MySQL — lazy connection with auto-reconnect
+# MySQL — lazy, auto-reconnect, never crashes chatbot if DB is down
 # ─────────────────────────────────────────────────────────────────────────────
 
 _mysql_conn = None
@@ -62,17 +61,15 @@ _mysql_lock = threading.Lock()
 
 
 def _get_conn():
-    """Return a live MySQL connection, reconnecting if needed."""
     global _mysql_conn
     host = os.getenv("MYSQL_HOST", "")
     if not host:
         return None
-
     with _mysql_lock:
         try:
             import pymysql
             if _mysql_conn is None or not _mysql_conn.open:
-                raise Exception("reconnect needed")
+                raise Exception("reconnect")
             _mysql_conn.ping(reconnect=False)
             return _mysql_conn
         except Exception:
@@ -88,15 +85,15 @@ def _get_conn():
                     connect_timeout=5,
                     cursorclass=pymysql.cursors.DictCursor,
                 )
-                logger.info("MySQL connected: %s/%s", host, os.getenv("MYSQL_DATABASE", ""))
+                logger.info("MySQL connected")
                 return _mysql_conn
             except Exception as e:
-                logger.warning("MySQL unavailable (%s) — in-memory only", e)
+                logger.warning("MySQL unavailable: %s", e)
                 _mysql_conn = None
                 return None
 
 
-def _ensure_tables() -> None:
+def _ensure_tables():
     conn = _get_conn()
     if not conn:
         return
@@ -104,19 +101,19 @@ def _ensure_tables() -> None:
         with conn.cursor() as cur:
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
-                    id         INT AUTO_INCREMENT PRIMARY KEY,
-                    name       VARCHAR(100),
-                    email      VARCHAR(255) UNIQUE,
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(100),
+                    email VARCHAR(255) UNIQUE,
                     support_id VARCHAR(100),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS chat_history (
-                    id         INT AUTO_INCREMENT PRIMARY KEY,
-                    user_id    INT  NOT NULL,
-                    sender     VARCHAR(20) NOT NULL,
-                    message    TEXT NOT NULL,
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    sender VARCHAR(20) NOT NULL,
+                    message TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                     INDEX idx_user_id (user_id)
@@ -124,18 +121,17 @@ def _ensure_tables() -> None:
             """)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS tickets (
-                    id            INT AUTO_INCREMENT PRIMARY KEY,
+                    id INT AUTO_INCREMENT PRIMARY KEY,
                     ticket_number VARCHAR(50) UNIQUE,
-                    user_id       INT,
-                    subject       VARCHAR(255),
-                    message       TEXT,
-                    status        VARCHAR(50) DEFAULT 'OPEN',
-                    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    user_id INT,
+                    subject VARCHAR(255),
+                    message TEXT,
+                    status VARCHAR(50) DEFAULT 'OPEN',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """)
-        logger.info("MySQL tables verified")
     except Exception as e:
-        logger.warning("MySQL table check failed: %s", e)
+        logger.warning("Table setup: %s", e)
 
 
 try:
@@ -145,14 +141,10 @@ except Exception:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MySQL helpers  (used by api.py AND answer_builder)
+# MySQL public helpers (called from api.py too)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def db_find_or_create_user(name: str, email: str, support_id: str = "") -> Tuple[int, bool]:
-    """
-    Find user by email or create new one.
-    Returns (user_id, existed_already).
-    """
     conn = _get_conn()
     if not conn:
         return 0, False
@@ -168,12 +160,11 @@ def db_find_or_create_user(name: str, email: str, support_id: str = "") -> Tuple
             )
             return cur.lastrowid, False
     except Exception as e:
-        logger.warning("db_find_or_create_user failed: %s", e)
+        logger.warning("db_find_or_create_user: %s", e)
         return 0, False
 
 
 def db_save_message(user_id: int, sender: str, message: str) -> None:
-    """Save one chat message for a logged-in user."""
     if not user_id:
         return
     conn = _get_conn()
@@ -186,11 +177,10 @@ def db_save_message(user_id: int, sender: str, message: str) -> None:
                 (user_id, sender, message),
             )
     except Exception as e:
-        logger.warning("db_save_message failed: %s", e)
+        logger.warning("db_save_message: %s", e)
 
 
 def db_load_history(user_id: int, limit: int = 40) -> List[Dict[str, str]]:
-    """Load chat history ordered oldest→newest."""
     if not user_id:
         return []
     conn = _get_conn()
@@ -202,44 +192,40 @@ def db_load_history(user_id: int, limit: int = 40) -> List[Dict[str, str]]:
                 """
                 SELECT sender, message FROM (
                     SELECT sender, message, created_at
-                    FROM chat_history
-                    WHERE user_id = %s
-                    ORDER BY created_at DESC
-                    LIMIT %s
+                    FROM chat_history WHERE user_id = %s
+                    ORDER BY created_at DESC LIMIT %s
                 ) sub ORDER BY created_at ASC
                 """,
                 (user_id, limit),
             )
             return [{"sender": r["sender"], "message": r["message"]} for r in cur.fetchall()]
     except Exception as e:
-        logger.warning("db_load_history failed: %s", e)
+        logger.warning("db_load_history: %s", e)
         return []
 
 
 def db_create_ticket(user_id: int, subject: str, message: str) -> str:
-    """Create a support ticket and return the ticket number."""
     conn = _get_conn()
     if not conn:
         return "TKT-ERR"
     try:
         with conn.cursor() as cur:
-            # Get next ticket number
             cur.execute("SELECT COUNT(*) AS cnt FROM tickets")
-            row   = cur.fetchone()
-            num   = (row["cnt"] if row else 0) + 1001
-            tkt   = f"TKT-{num}"
+            row = cur.fetchone()
+            num = (row["cnt"] if row else 0) + 1001
+            tkt = f"TKT-{num}"
             cur.execute(
                 "INSERT INTO tickets (ticket_number, user_id, subject, message) VALUES (%s, %s, %s, %s)",
                 (tkt, user_id or None, subject, message),
             )
             return tkt
     except Exception as e:
-        logger.warning("db_create_ticket failed: %s", e)
+        logger.warning("db_create_ticket: %s", e)
         return "TKT-ERR"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Customer profile (in-memory; persisted via chat context for logged-in users)
+# Customer profile — persisted in-memory, synced to MySQL via chat history
 # ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -277,7 +263,7 @@ class Profile:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# In-memory session store
+# Session memory
 # ─────────────────────────────────────────────────────────────────────────────
 
 _SES: Dict[str, List[Dict]] = {}
@@ -287,13 +273,9 @@ _LK  = threading.Lock()
 
 
 def _hist(sid: str, uid: int = 0) -> List[Dict[str, str]]:
-    """
-    Returns history as [{"role": "user"|"assistant", "content": "..."}]
-    for OpenAI messages format.
-    """
+    """Returns history as OpenAI message format [{role, content}]."""
     if uid:
         rows = db_load_history(uid)
-        # Convert sender→role for OpenAI
         return [
             {"role": "user" if r["sender"] == "user" else "assistant", "content": r["message"]}
             for r in rows
@@ -303,9 +285,8 @@ def _hist(sid: str, uid: int = 0) -> List[Dict[str, str]]:
 
 
 def _push(sid: str, role: str, content: str, uid: int = 0) -> None:
-    sender = "user" if role == "user" else "bot"
     if uid:
-        db_save_message(uid, sender, content)
+        db_save_message(uid, "user" if role == "user" else "bot", content)
     with _LK:
         h = _SES.setdefault(sid, [])
         h.append({"role": role, "content": content})
@@ -316,14 +297,12 @@ def _push(sid: str, role: str, content: str, uid: int = 0) -> None:
 
 def _pro(sid: str) -> Profile:
     with _LK:
-        if sid not in _PRO:
-            _PRO[sid] = Profile()
+        if sid not in _PRO: _PRO[sid] = Profile()
         return _PRO[sid]
 
 
 def _save_pro(sid: str, p: Profile) -> None:
-    with _LK:
-        _PRO[sid] = p
+    with _LK: _PRO[sid] = p
 
 
 def _sm(sid, k, v):
@@ -344,6 +323,7 @@ def _rst_aff(sid):
     with _LK: _MET.setdefault(sid, {})["aff"] = 0
 
 def _ask_now(sid):
+    """Ask a question on every other response — avoids interrogation fatigue."""
     with _LK:
         m = _MET.setdefault(sid, {})
         c = m.get("rc", 0) + 1; m["rc"] = c
@@ -351,50 +331,44 @@ def _ask_now(sid):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Utilities
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _clean(text: str) -> str:
-    if not text: return ""
-    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
-    text = re.sub(r"\*(.*?)\*",     r"\1", text)
-    text = re.sub(r"_(.*?)_",       r"\1", text)
-    text = text.replace("→", "to").replace("->", "to").replace("`", "")
-    for bad in [
-        "feel free to ask!", "feel free to ask.",
-        "don't hesitate to ask.", "just let me know!",
-        "just let me know.", "please let me know if you need anything.",
-    ]:
-        if text.lower().endswith(bad.lower()):
-            text = text[:-len(bad)].rstrip(" ,.")
-    return re.sub(r"\n{3,}", "\n\n", text).strip()
-
-
-def _norm(text: str) -> str:
-    return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", " ", text.lower())).strip()
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Profile extraction
+# Profile extraction from user messages
 # ─────────────────────────────────────────────────────────────────────────────
 
 _FINES_RE = re.compile(
     r"\b(\d+)\s*(?:fines?|pcns?|penalties|violations?|tickets?)"
     r"(?:\s*(?:per|a|each|every)\s*(?:month|monthly|week))?\b", re.I)
-_IND_RE = re.compile(
+_IND_RE  = re.compile(
     r"\b(logistics|delivery|courier|haulage|transport|taxi|minicab|bus|coach|construction)\b", re.I)
 _NAME_RE = re.compile(r"\b(?:i am|i'm|my name is|call me)\s+([A-Z][a-z]+)\b")
 _ISS = [
     (re.compile(r"\b(miss(?:ed?|ing)?\s+(?:deadlines?|appeals?|due\s*dates?))\b", re.I), "missed deadlines"),
     (re.compile(r"\b(drivers?\s+(?:dispute|deny|ignor))\b", re.I),                      "driver disputes"),
     (re.compile(r"\b(spreadsheet)\b", re.I),                                             "using spreadsheets"),
-    (re.compile(r"\b(too\s+much\s+admin)\b", re.I),                                     "too much admin"),
+    (re.compile(r"\b(too\s+much\s+(admin|time|work))\b", re.I),                         "too much admin"),
+    (re.compile(r"\b(out of (my )?time|no time|always busy)\b", re.I),                  "time pressure"),
 ]
-_FINES_CTX = {"how many fines", "fines per month", "fines a month", "monthly fines", "deal with each month"}
-_VEH_CTX   = {"how many vehicles", "fleet size", "vehicles do you", "vehicles are in", "how big is your fleet"}
+
+# Words that mean the number is definitely a vehicle count
+_VEH_WORDS = {
+    "vehicle", "vehicles", "van", "vans", "truck", "trucks", "lorry",
+    "lorries", "car", "cars", "fleet", "in my fleet", "in our fleet",
+}
+# Words that mean the number is definitely a fines volume
+_FINE_WORDS = {
+    "fines", "fine", "pcns", "pcn", "penalties", "violations", "tickets",
+}
+# Context hints — last question asked
+_FINES_CTX = {
+    "how many fines", "fines per month", "fines a month", "monthly fines",
+    "deal with each month", "fines do you", "fine volume",
+}
+_VEH_CTX = {
+    "how many vehicles", "fleet size", "vehicles do you", "vehicles are in",
+    "how big is your fleet", "size of your fleet",
+}
 
 
-def _upd(sid, q):
+def _upd(sid: str, q: str) -> None:
     p = _pro(sid)
     p.turns += 1
     m = _NAME_RE.search(q)
@@ -411,19 +385,29 @@ def _upd(sid, q):
 
 
 def _resolve_bare_number(n: int, sid: str) -> Optional[str]:
+    """
+    When user sends only a number, figure out if it's vehicles or fines
+    based on the last question Nova asked. If unclear, return None → ask.
+    """
     last_q = (_gm(sid, "last_nova_q") or "").lower()
     lt     = (_gm(sid, "lt") or "").lower()
+
+    # Check last question text for explicit hints
     for hint in _FINES_CTX:
         if hint in last_q: return "fines"
     for hint in _VEH_CTX:
         if hint in last_q: return "vehicle"
-    if lt in {"pricing", "plan_recommendation", "vehicles", "cost"}: return "vehicle"
-    if lt in {"fines_volume", "savings"}: return "fines"
+
+    # Check last topic
+    if lt in {"pricing", "plan_recommendation", "cost"}: return "vehicle"
+    if lt in {"fines_volume", "savings"}:                return "fines"
+
+    # Cannot determine — ask the user
     return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Topic shortcuts
+# Topic shortcuts — single words answered immediately without asking to clarify
 # ─────────────────────────────────────────────────────────────────────────────
 
 _TOPIC_SHORTCUTS: Dict[str, str] = {
@@ -457,6 +441,30 @@ _TOPIC_SHORTCUTS: Dict[str, str] = {
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Utilities
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _clean(text: str) -> str:
+    if not text: return ""
+    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
+    text = re.sub(r"\*(.*?)\*",     r"\1", text)
+    text = re.sub(r"_(.*?)_",       r"\1", text)
+    text = text.replace("→", "to").replace("->", "to").replace("`", "")
+    for bad in [
+        "feel free to ask!", "feel free to ask.",
+        "don't hesitate to ask.", "just let me know!",
+        "just let me know.", "please let me know if you need anything.",
+    ]:
+        if text.lower().endswith(bad.lower()):
+            text = text[:-len(bad)].rstrip(" ,.")
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+def _norm(text: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", " ", text.lower())).strip()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Intent sets
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -484,6 +492,7 @@ _AFF = {
     "yes explain","go for it","sounds good","continue","carry on",
     "keep going","please do","i would","please explain","show me",
     "walk me through it","for sure","yes for sure","sure thing","yes tell me",
+    "yes please explain","yes walk me through",
 }
 _THX = {
     "thanks","thank you","thank u","cheers","that helps","that helped","ta",
@@ -491,7 +500,7 @@ _THX = {
     "lovely","great","awesome","wonderful","thank you so much","many thanks",
 }
 _BYE  = {"bye","goodbye","see you","see ya","later","take care","good bye","cya","farewell","cheerio"}
-_NEG  = {"no","nope","nah","no thanks","not now","not really","no thank you","nah thanks","not sure"}
+_NEG  = {"no","nope","nah","no thanks","not now","not really","no thank you","nah thanks"}
 _RUDE = {"stupid","idiot","useless","rubbish","garbage","terrible","you suck","dumb bot","waste of time"}
 _FILL = {
     "ok","okay","right","alright","cool","nice","interesting","really",
@@ -499,12 +508,21 @@ _FILL = {
     "noted","wow","woah","omg","anything","something","whatever",
 }
 
+# Frustration / confusion — user is pushing back, needs empathy + redirect
+_FRUSTRATION_RE = re.compile(
+    r"\b(why|what\??|what\s+\?|huh|confused|wrong|incorrect|not right|"
+    r"that.?s wrong|don.?t understand|makes no sense|what do you mean|"
+    r"what are you (talking|saying)|why redirect|why are you|stop redirect)\b",
+    re.I,
+)
+
 _FF_OK = re.compile(
     r"\b(council|authority|fine|pcn|penalty|fineflow|fine flow|appeal|dispute|"
     r"driver|fleet|vehicle|overage|allowance|billing|subscription|payment|"
     r"uk traffic|traffic violation|parking|bus lane|congestion|emission|"
     r"dvla|tfl|fixed penalty|notice to owner|gmail|inbox|csv|upload|"
-    r"dashboard|referral|credits|stripe|sign up|get started|how much|pricing|cost|plan)\b", re.I)
+    r"dashboard|referral|credits|stripe|sign up|get started|how much|"
+    r"pricing|cost|plan|time|admin|deadline|miss)\b", re.I)
 
 _OT = [
     re.compile(r"\b(html|css|javascript|typescript|python|java|php|sql|react|angular|vue|node\.?js|django|flask|docker|kubernetes|github|coding|programming|teach me|how to code)\b", re.I),
@@ -516,21 +534,29 @@ _OT = [
 ]
 
 
-def _is_ot(q):
+def _is_ot(q: str) -> bool:
     if _FF_OK.search(q): return False
     return any(p.search(q) for p in _OT)
 
 
-_VEH_EX = re.compile(r"\b(\d+)\s*(vehicle|vehicles|van|vans|truck|trucks|car|cars|lorry|lorries|in my fleet|in our fleet)\b", re.I)
+_VEH_EX = re.compile(
+    r"\b(\d+)\s*(vehicle|vehicles|van|vans|truck|trucks|car|cars|lorry|lorries|in my fleet|in our fleet)\b", re.I)
 _VEH_FL = re.compile(r"\b(?:fleet of|manage|running|operate|run)\s+(\d+)\b", re.I)
 _VEH_BR = re.compile(r"^\s*(\d+)\s*$")
 _DRV_CT = re.compile(r"\b(driver|drivers|staff|employee|employees|people|worker|team|members)\b", re.I)
-_PURCH  = re.compile(r"\b(want to buy|want to subscribe|want to sign up|how do i get started|how do i sign up|get started|free trial|sign me up|book a demo|talk to sales|how to start|where do i sign|how do i join)\b", re.I)
-_CONV   = re.compile(r"\b(convince|persuade|sell me|why should i|why buy|is it worth|should i buy|worth it|why choose fineflow|why fine flow)\b", re.I)
-_OBJ    = re.compile(r"\b(expensive|too much|too costly|already use spreadsheet|we manage manually|we handle fines ourselves|manage fines manually)\b", re.I)
+_PURCH  = re.compile(
+    r"\b(want to buy|want to subscribe|want to sign up|how do i get started|"
+    r"how do i sign up|get started|free trial|sign me up|book a demo|"
+    r"talk to sales|how to start|where do i sign|how do i join)\b", re.I)
+_CONV   = re.compile(
+    r"\b(convince|persuade|sell me|why should i|why buy|is it worth|"
+    r"should i buy|worth it|why choose fineflow|why fine flow)\b", re.I)
+_OBJ    = re.compile(
+    r"\b(expensive|too much|too costly|already use spreadsheet|"
+    r"we manage manually|we handle fines ourselves|manage fines manually)\b", re.I)
 
 
-def _get_vc(q, sid):
+def _get_vc(q: str, sid: str) -> Optional[int]:
     if _DRV_CT.search(q): return None
     raw = None
     m = _VEH_EX.search(q)
@@ -540,15 +566,17 @@ def _get_vc(q, sid):
     return -1 if raw > MAX_FLEET else raw
 
 
-def _plan_answer(n, p):
+def _plan_answer(n: int, p: Profile) -> str:
     p.fleet = n
     if n <= 50:    name, price, lim = "Essential", "£99",  "50"
     elif n <= 100: name, price, lim = "Core",      "£199", "100"
     elif n <= 200: name, price, lim = "Advanced",  "£399", "200"
     else:          name, price, lim = "Elite",      "£499", "unlimited"
-    return (f"With {n} vehicles, the {name} plan at {price} per month is the right fit — "
-            f"covers up to {lim} vehicles with everything included and nothing locked away. "
-            f"Want me to walk you through what's included?")
+    return (
+        f"With {n} vehicles, the {name} plan at {price} per month is the right fit — "
+        f"covers up to {lim} vehicles with everything included and nothing locked away. "
+        f"Want me to walk you through what's included?"
+    )
 
 
 _TMAP = {
@@ -559,12 +587,12 @@ _TMAP = {
     "referral":"referral","refer":"referral","discount":"referral",
     "security":"security","gdpr":"security","card":"security",
     "billing":"billing","stripe":"billing","dashboard":"dashboard",
-    "gmail":"email","inbox":"email","save":"savings","admin time":"savings",
+    "gmail":"email","inbox":"email","save":"savings","admin":"savings",
     "overdue":"overdue","deadline":"overdue","sign":"sign_up","get started":"sign_up",
 }
 
 
-def _topic(t):
+def _topic(t: str) -> Optional[str]:
     t = t.lower()
     for k, v in _TMAP.items():
         if k in t: return v
@@ -572,7 +600,7 @@ def _topic(t):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# System prompt
+# System prompt — client's exact wording, warm human tone
 # ─────────────────────────────────────────────────────────────────────────────
 
 _SYSTEM = """You are Nova, the AI assistant for Fine Flow — a UK fleet fine management platform.
@@ -582,77 +610,103 @@ Core promise: Cut admin time by up to 80% and never miss a penalty deadline agai
 Fine Flow provides 24/7 fleet fine tracking, management and compliance in one place.
 
 YOUR PERSONALITY:
-Warm, humble, direct — like a knowledgeable colleague who genuinely cares. Conversational and concise. Never robotic. Never pushy.
+Warm, humble, direct — like a knowledgeable colleague who genuinely cares. Conversational. Never robotic. Never pushy. Think of a brilliant product expert who listens carefully and gives real, useful answers.
 
-CRITICAL RULES:
+ABSOLUTE RULES:
 
-1. SHORT ANSWERS — 2 to 3 sentences. Never write long paragraphs.
+1. SHORT AND PRECISE
+2 to 3 sentences. Never write long paragraphs. If they want more they'll ask.
 
-2. CLIENT'S EXACT WORDING — When describing Fine Flow use:
+2. CLIENT'S EXACT WORDING — use these phrases when describing Fine Flow:
 "Fine Flow is an automated system for managing fines from start to finish"
 "keeps the entire process organised, accountable, and under control"
 "cut admin time by up to 80%"
 "never miss a penalty deadline"
+"turning penalties into progress"
 
-3. MEMORY — If you know their fleet size, volume, industry or problems — always use it. Never ask for something they already told you.
+3. MEMORY — ALWAYS USE WHAT YOU KNOW
+If you know their fleet size, volume, industry or problems — always reference it naturally. Never ask for something they already told you. Personalise every answer.
 
-4. COUNTER QUESTIONS ON "NO" — Do NOT reset. Ask a DIFFERENT relevant follow-up. Keep them engaged.
-
-5. FOLLOW-UP QUESTIONS — After most answers ask one short relevant question. Vary them:
+4. FOLLOW-UP QUESTIONS
+After most answers, ask one short relevant question to continue the conversation:
 "How many vehicles are in your fleet?"
 "How many fines do you deal with each month?"
 "What does your current process look like?"
 "Is there a particular stage causing the most headaches?"
+"Have you had fines escalate because of missed deadlines?"
 "What's the biggest pain point right now?"
+Vary them. Never repeat the same question twice in a row.
 
-6. AFFIRMATIVE LOOP — First yes/sure → explain what's included (2-3 sentences). Second yes/sure → give contact details and close.
+5. COUNTER QUESTIONS ON "NO" OR FRUSTRATION
+When user says "no", "what?", "why?" or expresses confusion/frustration — DO NOT reset.
+DO NOT say "no problem" and stop.
+Acknowledge warmly and ask a DIFFERENT relevant follow-up that continues the conversation.
+Example: if they say "why redirect?" → say "That's fair — I shouldn't have added that. What would you like to know more about?"
 
-7. TOPIC SHORTCUTS — When user sends a single word like "appeals" or "fines" — answer it directly.
+6. AFFIRMATIVE LOOP PREVENTION
+First yes/sure → explain warmly what's included in 2-3 sentences.
+Second yes/sure on same topic → give contact details and close.
+NEVER dump the full pricing list again on a second yes.
 
-8. PAYMENT — Fine Flow does NOT pay fines automatically. Always say NO clearly.
+7. PAYMENT
+Fine Flow does NOT pay fines automatically. Always say NO clearly. The reason is anti-bot protection and card verification on authority payment portals.
 
-9. CARD DETAILS — Fine Flow never stores card details. Say this first when asked.
+8. CARD DETAILS
+Fine Flow never stores card details. Say this first when asked.
 
-10. SUPPORT ESCALATION — If you cannot answer something confidently or the question needs human review, say:
-"I'm redirecting you to our expert support team who can help with this directly."
-This will trigger a support ticket form for the user.
-
-11. TOPIC — Help with Fine Flow AND general UK fleet fine questions. For unrelated topics say:
+9. TOPIC SCOPE
+Help with Fine Flow AND general UK fleet fine questions (PCNs, FPNs, councils, TfL, DVLA, appeal rights, parking rules). For completely unrelated topics say:
 "I'm here to help with fleet fine management — anything about fines, Fine Flow or appeals?"
 
-12. NO HOLLOW ENDINGS — Never end with "feel free to ask", "don't hesitate", "just let me know".
+10. NO HOLLOW ENDINGS
+Never end with "feel free to ask", "don't hesitate", "just let me know", "let me know if you have more questions".
 
-PRICING:
+11. NEVER ADD "REDIRECTING TO SUPPORT" TO A GOOD ANSWER
+Only mention support escalation when you genuinely cannot answer something at all. A good, confident answer should NEVER end with a support redirect.
+
+PRICING (memorise exactly — never get this wrong):
 Essential: £99/month — 5 to 50 vehicles
 Core: £199/month — 51 to 100 vehicles
 Advanced: £399/month — 101 to 200 vehicles
-Elite: £499/month — 200+ vehicles
-Per fine within allowance: £0.75 | Overage: £2.50 | PAYG: £2.75 (no subscription)
-All plans identical features. No £2.00 fee exists.
+Elite: £499/month — 200+ vehicles (unlimited)
+Per fine within allowance: £0.75
+Overage beyond allowance: £2.50 per fine
+Pay-as-you-go (no subscription): £2.75 per fine
+All plans include identical features. No £2.00 fee exists anywhere.
 
-REFERRAL:
-Credits: 100 (1-25v) | 250 (26-100v) | 750 (101-500v) | 2000 (500+v)
-Silver 3=100 credits | Gold 5=10% off 12mo | Platinum 10=15% off 12mo | Titan 25=20% for life
-New joiners with code: £75 credits
+REFERRAL PROGRAMME:
+Credits earned when a referred company subscribes:
+1-25 vehicles: 100 credits | 26-100: 250 | 101-500: 750 | 500+: 2,000 credits
+Silver (3 referrals): 100 bonus credits
+Gold (5): 10% off subscription for 12 months
+Platinum (10): 15% off for 12 months
+Titan (25): 20% off for life
+New joiners with referral code: £75 credits
 
 CONTACT: +47 32 28 50 00 | ff.sales@fineflow.com
 
-EXAMPLES:
-
-User: appeals
-Nova: Yes — Fine Flow doesn't just manage appeals, it learns from them. When a driver disputes a fine the admin reviews it, and if accepted Fine Flow generates the appeal letter and sends it directly to the issuing authority. Over time it refines its approach based on wins and losses, giving you a win probability before you submit. Have you had fines you felt should have been challenged?
+EXAMPLE RESPONSES (copy this tone exactly):
 
 User: fines
-Nova: Fine Flow is an automated system for managing fines from start to finish. The moment a fine arrives in your inbox it's captured automatically, details extracted, matched to the right driver and tracked through to resolution — keeping everything organised, accountable and under control. Want me to walk you through how it all works?
+Nova: Fine Flow is an automated system for managing fines from start to finish. The moment one arrives in your inbox it's captured automatically, details extracted, matched to the right driver and tracked through to resolution — keeping everything organised, accountable and under control. Want me to walk you through how it all works?
 
-User: yes (after social response)
+User: i am always out of time
+Nova: That's exactly what Fine Flow is built for. It cuts admin time by up to 80% by automating everything from capturing fines to managing appeals, so your team isn't chasing emails and spreadsheets all day. How many fines are you typically dealing with each month?
+
+User: why redirect?
+Nova: That's fair — I shouldn't have added that. What would you like to know more about?
+
+User: yes (after social)
 Nova: What would you like to know about Fine Flow — pricing, how it works, appeals, or something else?
 
-User: no (after a question)
-Nova: Fair enough — what's the biggest challenge with your current fine management setup? That'll help me point you to what's most useful.
+User: no
+Nova: Fair enough — what's the biggest challenge with your current fine management setup?
 
-User: something outside Fine Flow knowledge
-Nova: I'm redirecting you to our expert support team who can help with this directly.
+User: 43 vehicles
+Nova: With 43 vehicles, the Essential plan at £99 per month is the right fit — covers up to 50 vehicles with everything included and nothing locked away. Want me to walk you through what's included?
+
+User: 54 (with no context)
+Nova: Just to make sure I point you in the right direction — is that the number of vehicles in your fleet, or how many fines you deal with each month?
 """
 
 
@@ -662,7 +716,7 @@ def _build_sys(p: Profile, mode: str = "") -> str:
     if s:
         parts.append(
             f"\nWHAT I KNOW ABOUT THIS CUSTOMER:\n{s}\n"
-            "Always use this. Never ask for information you already have."
+            "Always use this naturally. Never ask for information you already have."
         )
     if mode:
         parts.append(f"\nMODE: {mode}")
@@ -670,25 +724,26 @@ def _build_sys(p: Profile, mode: str = "") -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# OpenAI + RAG  (unchanged)
+# OpenAI + RAG
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _ai(msgs, max_tok=150):
+def _ai(msgs: List[Dict], max_tok: int = 150) -> Optional[str]:
     if not OPENAI_API_KEY: return None
     try:
         r = requests.post(
             OPENAI_API_URL,
             headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
             json={"model": OPENAI_MODEL, "messages": msgs, "temperature": 0.7, "max_tokens": max_tok},
-            timeout=25)
+            timeout=25,
+        )
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"].strip()
     except Exception:
         logger.exception("OpenAI failed"); return None
 
 
-def _rag(q) -> Tuple[str, float]:
-    """Returns (context_string, best_score)."""
+def _rag(q: str) -> Tuple[str, float]:
+    """Returns (context, best_score). Score 0.0 = nothing found."""
     try:
         raw    = rag_search(q, top_k=TOP_K)
         ranked = rerank_hits(raw, q)
@@ -700,7 +755,7 @@ def _rag(q) -> Tuple[str, float]:
         logger.exception("RAG failed"); return "", 0.0
 
 
-def _make_msgs(query, ctx, hist, p, mode="", extra=""):
+def _make_msgs(query: str, ctx: str, hist: List[Dict], p: Profile, mode: str = "", extra: str = "") -> List[Dict]:
     m = [{"role": "system", "content": _build_sys(p, mode)}]
     m.extend(hist[-8:])
     parts = []
@@ -712,62 +767,82 @@ def _make_msgs(query, ctx, hist, p, mode="", extra=""):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Affirmative + Negative handlers
+# Affirmative + Negative + Frustration handlers
 # ─────────────────────────────────────────────────────────────────────────────
 
-_CLOSE = "The best next step is to call the team on +47 32 28 50 00 or email ff.sales@fineflow.com — they'll have you sorted quickly."
+_CLOSE = (
+    "The best next step is to get in touch with the Fine Flow team directly — "
+    "call +47 32 28 50 00 or email ff.sales@fineflow.com and they'll have you sorted quickly."
+)
 
 _EXPAND = {
     "pricing":             "Explain Fine Flow pricing warmly in 2-3 sentences. Ask how many vehicles if unknown.",
-    "plan_recommendation": "Explain warmly what every Fine Flow plan includes in 2-3 sentences. Do NOT list all plans again. Ask if they want to contact sales.",
-    "appeals":             "Explain the appeal process: driver disputes → DISPUTED → admin accepts/rejects → if accepted, appeal letter sent by email. 2-3 sentences.",
+    "plan_recommendation": "Explain what every Fine Flow plan includes in 2-3 sentences. Do NOT list all plans again. Ask if they want to get in touch with sales.",
+    "appeals":             "Explain the appeal process: driver disputes fine → DISPUTED → admin accepts/rejects → if accepted, appeal letter sent by email to authority, status UNDER REVIEW. 2-3 sentences.",
     "driver_mgmt":         "Explain how drivers are added (individually or CSV) and matched to fines using vehicle, date and time. 2-3 sentences.",
-    "fines_volume":        "Based on their fine volume, recommend the right plan. Use their numbers specifically.",
-    "referral":            "Explain the referral programme: credits per referral based on fleet size, tier discounts up to 20% for life. 2-3 sentences.",
-    "security":            "Explain GDPR compliance: JWT, bcrypt, AES-256, never stores card data, never shares data. 2-3 sentences.",
-    "billing":             "Explain billing: monthly Stripe, credits reset, overage end of cycle, cooldown on cancel. 2-3 sentences.",
-    "dashboard":           "Explain company dashboard: urgency-based, outstanding fines, deadlines, credits, billing. 2-3 sentences.",
-    "savings":             "Give specific savings figures for their fleet size if known.",
-    "email":               "Explain Gmail connection: OAuth (recommended) or App Password. 2-3 sentences.",
-    "overdue":             "Explain how Fine Flow tracks deadlines and marks fines OVERDUE at midnight. 2-3 sentences.",
-    "sign_up":             "Tell them warmly to call +47 32 28 50 00 or email ff.sales@fineflow.com.",
+    "fines_volume":        "Based on their fine volume, recommend the right plan. Use their actual numbers.",
+    "referral":            "Explain the referral programme: credits per referral by fleet size, tier discounts up to 20% for life. 2-3 sentences.",
+    "security":            "Explain GDPR: JWT, bcrypt, AES-256-CBC, never stores card data, never shares data. 2-3 sentences.",
+    "billing":             "Explain billing: monthly via Stripe, credits reset each cycle, overage collected end of cycle, cooldown on cancellation. 2-3 sentences.",
+    "dashboard":           "Explain the company dashboard: urgency-based, shows outstanding fines, deadlines, credit balance, billing status. 2-3 sentences.",
+    "savings":             "Give specific savings figures for their fleet size if known. If not, give general figures.",
+    "email":               "Explain Gmail connection: OAuth 2.0 (recommended) or App Password IMAP. 2-3 sentences.",
+    "overdue":             "Explain how Fine Flow checks for overdue fines at midnight every day and marks them automatically. 2-3 sentences.",
+    "sign_up":             "Tell them to call +47 32 28 50 00 or email ff.sales@fineflow.com to get started.",
 }
 
 
-def _aff_response(sid, hist, p):
+def _aff_response(sid: str, hist: List[Dict], p: Profile) -> str:
     cnt = _inc_aff(sid)
     lt  = _gm(sid, "lt") or ""
 
+    # After social response — redirect to topic
     if _gm(sid, "last_was_social"):
         _sm(sid, "last_was_social", False)
         return "What would you like to know about Fine Flow — pricing, how it works, appeals, or something else?"
 
+    # Second consecutive affirmative on plan/pricing → close the sale
     if cnt >= 2 and lt in ("plan_recommendation", "sign_up", "pricing"):
-        _rst_aff(sid); return _CLOSE
+        _rst_aff(sid)
+        return _CLOSE
 
     prompt = _EXPAND.get(lt, "Expand naturally on the most recent Fine Flow topic in 2-3 sentences. Use the customer's information if available.")
     ctx, _ = _rag(lt.replace("_", " ")) if lt else ("", 0.0)
-    m      = [{"role": "system", "content": _build_sys(p, "Warm, concise. 2-3 sentences. Natural question at end if it helps.")}]
+    m = [{"role": "system", "content": _build_sys(p, "Warm, concise. 2-3 sentences. One natural follow-up question if it helps.")}]
     m.extend(hist[-8:])
-    parts  = []
+    parts = []
     if ctx: parts.append(f"Fine Flow knowledge base:\n{ctx}")
     parts.append(f"Instruction: {prompt}")
     m.append({"role": "user", "content": "\n\n".join(parts)})
     return _ai(m, 180) or "What would you like to know more about?"
 
 
-def _neg_response(sid, hist, p):
+def _neg_response(sid: str, hist: List[Dict], p: Profile) -> str:
     lt     = (_gm(sid, "lt") or "").lower()
     last_q = (_gm(sid, "last_nova_q") or "").lower()
     ctx, _ = _rag(lt) if lt else ("", 0.0)
     extra  = (
-        f"The user said 'no'. Last topic: '{lt}'. Last question: '{last_q}'. "
-        f"Do NOT say 'no problem' and stop. Do NOT reset. "
-        f"Acknowledge briefly and ask a DIFFERENT relevant follow-up. Be warm and natural."
+        f"The user said 'no'. Last topic: '{lt}'. Last question asked: '{last_q}'. "
+        f"Do NOT say 'no problem' and stop. Acknowledge briefly and ask a DIFFERENT "
+        f"relevant follow-up that keeps the conversation going. Warm and natural."
     )
     m   = _make_msgs("no", ctx, hist[-8:], p, extra=extra)
     ans = _ai(m, 120)
     return ans or "Fair enough — what's the biggest challenge with your current fine management setup?"
+
+
+def _frustration_response(sid: str, query: str, hist: List[Dict], p: Profile) -> str:
+    lt    = (_gm(sid, "lt") or "").lower()
+    ctx, _ = _rag(lt) if lt else ("", 0.0)
+    extra = (
+        f"The user is expressing confusion or frustration: '{query}'. "
+        f"Acknowledge their feeling briefly and warmly. Apologise if Nova made an error. "
+        f"Then ask a clear, helpful question to get the conversation back on track. "
+        f"2-3 sentences max. Do not be defensive."
+    )
+    m   = _make_msgs(query, ctx, hist[-8:], p, extra=extra)
+    ans = _ai(m, 120)
+    return ans or "That's fair — let me start fresh. What would you like to know about Fine Flow?"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -779,12 +854,6 @@ def build_response(
     session_id: str = "default",
     user_id:    int = 0,
 ) -> Dict[str, Any]:
-    """
-    Returns dict with keys:
-      answer               : str
-      confidence           : float
-      trigger_ticket_popup : bool
-    """
     query      = query.strip()
     session_id = session_id or "default"
     if not query:
@@ -794,66 +863,82 @@ def build_response(
     p  = _pro(session_id)
     _upd(session_id, query)
 
-    def _respond(answer: str, conf: float = 1.0) -> Dict[str, Any]:
-        popup = _should_escalate(answer, conf)
-        if popup:
-            answer = answer + " I'm redirecting you to our expert support team who can help with this directly." if not any(ph in answer.lower() for ph in ["redirecting", "support team"]) else answer
-        return {"answer": answer, "confidence": conf, "trigger_ticket_popup": popup}
+    # Helper to build final response dict
+    def _ok(answer: str, conf: float = 1.0) -> Dict[str, Any]:
+        return {"answer": answer, "confidence": conf, "trigger_ticket_popup": False}
 
-    # ── TIER 1: Deterministic ─────────────────────────────────────────────
+    def _escalate(answer: str) -> Dict[str, Any]:
+        return {"answer": answer, "confidence": 0.2, "trigger_ticket_popup": True}
+
+    # ══════════════════════════════════════════════════════════════════
+    # TIER 1 — Deterministic (greetings/identity BEFORE off-topic guard)
+    # ══════════════════════════════════════════════════════════════════
 
     if nq in _GREET:
         _rst(session_id)
         a = "Hey! I'm Nova — Fine Flow's assistant. What can I help you with today?"
         _push(session_id, "user", query, user_id)
         _push(session_id, "assistant", a, user_id)
-        return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
+        return _ok(a)
 
     if nq in _SOC:
         _sm(session_id, "last_was_social", True)
         a = "Doing well, cheers for asking! What can I help you with — pricing, fines, appeals?"
-        return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
+        return _ok(a)
 
     if nq in _ID:
         a = "I'm Nova, Fine Flow's AI assistant. I can help with anything about managing fleet fines — pricing, appeals, how the platform works, UK fine rules. What would you like to know?"
-        return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
+        return _ok(a)
 
     if nq in _THX:
         _rst_aff(session_id)
-        return {"answer": "Happy to help! Anything else you'd like to know?", "confidence": 1.0, "trigger_ticket_popup": False}
+        return _ok("Happy to help! Anything else you'd like to know?")
 
     if nq in _BYE:
-        return {"answer": "Good luck with the fleet management. Come back any time!", "confidence": 1.0, "trigger_ticket_popup": False}
+        return _ok("Good luck with the fleet management. Come back any time!")
 
     if any(r in nq for r in _RUDE):
-        return {"answer": "Let me try again — what would you like to know about Fine Flow?", "confidence": 1.0, "trigger_ticket_popup": False}
+        return _ok("Let me try again — what would you like to know about Fine Flow?")
 
     if nq in _FILL:
         _rst_aff(session_id)
-        return {"answer": "Is there anything about Fine Flow I can help you with?", "confidence": 1.0, "trigger_ticket_popup": False}
+        lt = _gm(session_id, "lt")
+        if lt:
+            return _ok(f"Is there anything more you'd like to know about Fine Flow?")
+        return _ok("Is there anything about Fine Flow I can help you with?")
 
+    # Frustration / confusion — handle with empathy
+    if _FRUSTRATION_RE.search(query) and len(query.split()) <= 8:
+        _push(session_id, "user", query, user_id)
+        a = _clean(_frustration_response(session_id, query, _hist(session_id, user_id)[:-1], p))
+        _push(session_id, "assistant", a, user_id)
+        return _ok(a)
+
+    # Garbled / too short — handle gracefully
     words = [w for w in nq.split() if len(w) > 1]
     if (len(words) < 2
             and nq not in _AFF
             and nq not in _NEG
             and nq not in _TOPIC_SHORTCUTS
             and not _VEH_BR.match(query.strip())):
-        return {"answer": "What would you like to know about Fine Flow? I can help with fines, pricing, appeals or how the platform works.", "confidence": 1.0, "trigger_ticket_popup": False}
+        return _ok("What would you like to know about Fine Flow? I can help with fines, pricing, appeals or how the platform works.")
 
+    # Off-topic — AFTER all deterministic checks
     if _is_ot(query):
         a = "I'm here to help with fleet fine management — anything about fines, Fine Flow or appeals I can help with?"
         _push(session_id, "user", query, user_id)
         _push(session_id, "assistant", a, user_id)
-        return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
+        return _ok(a)
 
+    # Negative / "no"
     if nq in _NEG:
         _push(session_id, "user", query, user_id)
         _rst_aff(session_id)
         a = _clean(_neg_response(session_id, _hist(session_id, user_id)[:-1], p))
         _push(session_id, "assistant", a, user_id)
-        return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
+        return _ok(a)
 
-    # Topic shortcuts
+    # Topic shortcuts — single words like "appeals", "fines", "pricing"
     if nq in _TOPIC_SHORTCUTS:
         expanded = _TOPIC_SHORTCUTS[nq]
         _push(session_id, "user", query, user_id)
@@ -866,15 +951,16 @@ def build_response(
         t = _topic(nq) or _topic(ans)
         if t: _sm(session_id, "lt", t)
         _rst_aff(session_id)
-        return _respond(ans, score if score else 0.9)
+        if "?" in ans: _sm(session_id, "last_nova_q", ans)
+        return _ok(ans, score if score else 0.9)
 
-    # Explicit vehicle count
+    # Explicit vehicle count in message
     vc = _get_vc(query, session_id)
     if vc == -1:
         a = "That number doesn't look right — could you double check? How many vehicles are in your fleet?"
         _push(session_id, "user", query, user_id)
         _push(session_id, "assistant", a, user_id)
-        return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
+        return _ok(a)
     if vc is not None:
         _rst_aff(session_id)
         a = _plan_answer(vc, p)
@@ -882,13 +968,15 @@ def build_response(
         _push(session_id, "user", query, user_id)
         _push(session_id, "assistant", a, user_id)
         _sm(session_id, "lt", "plan_recommendation")
-        return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
+        _sm(session_id, "last_nova_q", a)
+        return _ok(a)
 
-    # Bare number
+    # Bare number — resolve by context or ask
     bm = _VEH_BR.match(query.strip())
     if bm:
         n        = int(bm.group())
         ctx_type = _resolve_bare_number(n, session_id)
+
         if ctx_type == "vehicle" and 0 < n <= MAX_FLEET:
             _rst_aff(session_id)
             a = _plan_answer(n, p)
@@ -896,28 +984,38 @@ def build_response(
             _push(session_id, "user", query, user_id)
             _push(session_id, "assistant", a, user_id)
             _sm(session_id, "lt", "plan_recommendation")
-            return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
+            _sm(session_id, "last_nova_q", a)
+            return _ok(a)
+
         elif ctx_type == "fines" and 0 < n < 10_000:
             p.volume = n
             _rst_aff(session_id)
             _save_pro(session_id, p)
             if p.fleet:
                 cost = round(n * 0.75, 2)
-                a = (f"Got it — {n} fines a month. On the {p.plan_name()} plan at {p.plan_price()}, "
-                     f"that's about £{cost:.2f} in processing costs within your allowance. "
-                     f"Want me to walk you through everything that's included?")
+                a = (
+                    f"Got it — {n} fines a month. On the {p.plan_name()} plan at {p.plan_price()}, "
+                    f"that's about £{cost:.2f} in processing costs within your allowance. "
+                    f"Want me to walk you through everything that's included?"
+                )
             else:
-                a = (f"Got it — {n} fines a month. Fine Flow would handle that cleanly. "
-                     f"How many vehicles are in your fleet so I can point you to the right plan?")
+                a = (
+                    f"Got it — {n} fines a month. Fine Flow would handle that cleanly. "
+                    f"How many vehicles are in your fleet so I can point you to the right plan?"
+                )
             _push(session_id, "user", query, user_id)
             _push(session_id, "assistant", a, user_id)
             _sm(session_id, "lt", "fines_volume")
-            return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
+            _sm(session_id, "last_nova_q", a)
+            return _ok(a)
+
         else:
-            a = "Just to make sure I give you the right info — is that the number of vehicles in your fleet, or your monthly fine volume?"
+            # No context — ask what the number means
+            a = "Just to make sure I point you in the right direction — is that the number of vehicles in your fleet, or how many fines you deal with each month?"
             _push(session_id, "user", query, user_id)
             _push(session_id, "assistant", a, user_id)
-            return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
+            _sm(session_id, "last_nova_q", a)
+            return _ok(a)
 
     # Purchase intent
     if _PURCH.search(query):
@@ -927,7 +1025,7 @@ def build_response(
         _push(session_id, "user", query, user_id)
         _push(session_id, "assistant", a, user_id)
         _sm(session_id, "lt", "sign_up")
-        return {"answer": a.strip(), "confidence": 1.0, "trigger_ticket_popup": False}
+        return _ok(a.strip())
 
     # Affirmative
     if nq in _AFF:
@@ -935,9 +1033,11 @@ def build_response(
         a = _clean(_aff_response(session_id, _hist(session_id, user_id)[:-1], p))
         _push(session_id, "assistant", a, user_id)
         _sm(session_id, "last_nova_q", "")
-        return {"answer": a, "confidence": 1.0, "trigger_ticket_popup": False}
+        return _ok(a)
 
-    # ── TIER 2: RAG + GPT-4o ──────────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════════
+    # TIER 2 — RAG + GPT-4o
+    # ══════════════════════════════════════════════════════════════════
 
     _rst_aff(session_id)
     _push(session_id, "user", query, user_id)
@@ -948,24 +1048,32 @@ def build_response(
     if _CONV.search(query):
         mode  = "PERSUADE"
         extra = (
-            "Use the customer's exact fleet size, volume and problems. Reference their numbers. No generic copy."
+            "Use the customer's exact fleet size, volume and problems. Reference their numbers directly. No generic copy."
             if p.fleet or p.volume or p.issues
-            else "Ask about fleet size and monthly fine volume first."
+            else "Ask about their fleet size and monthly fine volume first — you need their situation to give a tailored answer."
         )
     elif _OBJ.search(query):
         mode  = "SUPPORT"
-        extra = "Acknowledge their point warmly first. Reframe using their specific situation. 2-3 sentences. End with a question about the real cost of their current approach."
+        extra = (
+            "Acknowledge their point warmly first — do not dismiss it. "
+            "Reframe using their specific situation. 2-3 sentences max. "
+            "End with a question about the real cost of their current approach."
+        )
 
     if not _ask_now(session_id) and not extra:
         extra = "Do NOT end with a question this time. Make your point clearly and naturally, then stop."
 
-    ctx, score = _rag(query)
-    hist       = _hist(session_id, user_id)
-    ans        = _ai(_make_msgs(query, ctx, hist[:-1], p, mode, extra), 150)
+    ctx, score   = _rag(query)
+    has_ctx      = bool(ctx)
+    hist         = _hist(session_id, user_id)
+    ans          = _ai(_make_msgs(query, ctx, hist[:-1], p, mode, extra), 150)
 
+    # If OpenAI fails completely
     if not ans:
-        ans   = "I'm redirecting you to our expert support team who can help with this directly."
-        score = 0.0
+        return _escalate(
+            "I couldn't find a confident answer for that. "
+            "Our support team can help — I'm opening a support form for you."
+        )
 
     ans = _clean(ans)
     _push(session_id, "assistant", ans, user_id)
@@ -976,8 +1084,15 @@ def build_response(
     t = _topic(query) or _topic(ans)
     if t: _sm(session_id, "lt", t)
 
-    conf = score if score else (0.9 if ctx else 0.3)
-    return _respond(ans, conf)
+    conf = score if score else (0.85 if has_ctx else 0.4)
+
+    # Escalate ONLY when we have very low confidence AND no RAG context found
+    if _should_escalate(ans, conf, has_ctx):
+        return _escalate(
+            ans + " For anything more specific our support team can help — I'm opening a support form for you."
+        )
+
+    return {"answer": ans, "confidence": conf, "trigger_ticket_popup": False}
 
 
 def answer_sync(q: str, session_id: str = "default", user_id: int = 0) -> Dict[str, Any]:

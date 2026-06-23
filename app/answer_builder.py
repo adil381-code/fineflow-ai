@@ -1,18 +1,17 @@
 # app/answer_builder.py
 """
-FineFlow Nova — Production Final (State-Locked Memory Edition)
-==============================================================
-Key architectural changes:
-  1. Profile values (fleet, volume) are LOCKED once set — LLM can NEVER change them
-  2. Pricing updated: 3 tiers only — Essential £99, Core £199, Elite £499
-  3. Bare numbers ALWAYS ask for clarification when context is ambiguous
-  4. Apology language completely banned from system prompt
-  5. Escalation only fires when OpenAI has NO context and confidence < 0.35
-  6. Appeals flow corrected: driver disputes → admin accepts/rejects → THEN appeal sent
-  7. All existing MySQL / RAG / OpenAI logic preserved
+FineFlow Nova — Production Final (Conversation Progression Edition)
+====================================================================
+Core fix: Affirmative responses now PROGRESS the conversation forward.
+"Yes" after referrals → asks who they plan to refer, not re-explains referrals.
+"Yes" after appeals → asks about the specific fine, not re-explains the flow.
+"Yes" after plan recommendation → explains what's included, not re-lists pricing.
+
+Memory is locked (fleet, volume set once, never overwritten by LLM).
+Bare numbers always ask for clarification when context is ambiguous.
+No apologies. No hollow endings. No repetition loops.
 """
 
-import json
 import os
 import re
 import threading
@@ -37,12 +36,11 @@ TICKET_THRESHOLD = 0.35
 
 
 def _should_escalate(confidence: float, has_ctx: bool) -> bool:
-    """Only escalate when confidence is very low AND RAG found nothing."""
     return confidence < TICKET_THRESHOLD and not has_ctx
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MySQL
+# MySQL (unchanged from previous version)
 # ─────────────────────────────────────────────────────────────────────────────
 
 _mysql_conn = None
@@ -210,40 +208,42 @@ def db_create_ticket(user_id: int, subject: str, message: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# LOCKED Customer profile
-# Values set ONCE by deterministic code. LLM can NEVER overwrite them.
+# LOCKED Customer profile — values set once, never overwritten
 # ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class Profile:
-    fleet:    Optional[int]  = None   # set once, never overwritten
-    volume:   Optional[int]  = None   # set once, never overwritten
+    fleet:    Optional[int]  = None
+    volume:   Optional[int]  = None
     issues:   List[str]      = field(default_factory=list)
     industry: Optional[str]  = None
     name:     Optional[str]  = None
     turns:    int            = 0
 
-    def set_fleet(self, n: int) -> None:
-        """Lock fleet size — only sets if not already set."""
+    def set_fleet(self, n: int) -> bool:
+        """Lock fleet — returns True if newly set."""
         if self.fleet is None and 0 < n <= MAX_FLEET:
             self.fleet = n
+            return True
+        return False
 
-    def set_volume(self, n: int) -> None:
-        """Lock fine volume — only sets if not already set."""
+    def set_volume(self, n: int) -> bool:
+        """Lock volume — returns True if newly set."""
         if self.volume is None and 0 < n < 10_000:
             self.volume = n
+            return True
+        return False
 
     def summary(self) -> str:
         parts = []
         if self.name:    parts.append(f"Customer name: {self.name}")
-        if self.fleet:   parts.append(f"Fleet size: {self.fleet} vehicles (CONFIRMED — do not change this)")
-        if self.volume:  parts.append(f"Monthly fines: {self.volume} (CONFIRMED — do not change this)")
+        if self.fleet:   parts.append(f"Fleet size: {self.fleet} vehicles [LOCKED — do not change]")
+        if self.volume:  parts.append(f"Monthly fines: {self.volume} [LOCKED — do not change]")
         if self.industry: parts.append(f"Industry: {self.industry}")
-        if self.issues:  parts.append(f"Problems mentioned: {', '.join(self.issues)}")
+        if self.issues:  parts.append(f"Problems: {', '.join(self.issues)}")
         return "\n".join(parts)
 
     def plan_name(self) -> str:
-        """Deterministic — no LLM involvement."""
         if not self.fleet: return ""
         if self.fleet <= 50:   return "Essential"
         if self.fleet <= 100:  return "Core"
@@ -313,7 +313,6 @@ def _rst_aff(sid):
     with _LK: _MET.setdefault(sid, {})["aff"] = 0
 
 def _ask_now(sid):
-    """Return True on every other response to prevent interrogation fatigue."""
     with _LK:
         m = _MET.setdefault(sid, {})
         c = m.get("rc", 0) + 1; m["rc"] = c
@@ -321,7 +320,7 @@ def _ask_now(sid):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Profile extraction — deterministic, locked values
+# Profile extraction
 # ─────────────────────────────────────────────────────────────────────────────
 
 _FINES_EXPLICIT_RE = re.compile(
@@ -336,12 +335,11 @@ _ISS = [
     (re.compile(r"\b(spreadsheet)\b", re.I),                                             "using spreadsheets"),
     (re.compile(r"\b(too\s+much\s+(admin|time|work)|out of (my )?time|always busy)\b", re.I), "time pressure"),
 ]
-
-_FINES_CTX_WORDS = {
+_FINES_CTX = {
     "how many fines", "fines per month", "fines a month", "monthly fines",
-    "deal with each month", "fines do you", "fine volume", "fines every month",
+    "deal with each month", "fines do you", "fine volume",
 }
-_VEH_CTX_WORDS = {
+_VEH_CTX = {
     "how many vehicles", "fleet size", "vehicles do you", "vehicles are in",
     "how big is your fleet", "size of your fleet", "how many vans",
 }
@@ -353,7 +351,6 @@ def _upd(sid: str, q: str) -> None:
     m = _NAME_RE.search(q)
     if m and not p.name:
         p.name = m.group(1)
-    # Only extract EXPLICIT fine mentions (not bare numbers)
     m = _FINES_EXPLICIT_RE.search(q)
     if m:
         p.set_volume(int(m.group(1)))
@@ -366,16 +363,12 @@ def _upd(sid: str, q: str) -> None:
 
 
 def _resolve_bare_number(n: int, sid: str) -> Optional[str]:
-    """
-    STRICT: only resolve if Nova's last question explicitly asked for that type.
-    Otherwise return None → always ask.
-    """
     last_q = (_gm(sid, "last_nova_q") or "").lower()
-    for hint in _FINES_CTX_WORDS:
+    for hint in _FINES_CTX:
         if hint in last_q: return "fines"
-    for hint in _VEH_CTX_WORDS:
+    for hint in _VEH_CTX:
         if hint in last_q: return "vehicle"
-    return None  # ambiguous — must ask
+    return None  # ambiguous → must ask
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -388,7 +381,6 @@ def _clean(text: str) -> str:
     text = re.sub(r"\*(.*?)\*",     r"\1", text)
     text = re.sub(r"_(.*?)_",       r"\1", text)
     text = text.replace("→", "to").replace("->", "to").replace("`", "")
-    # Strip hollow endings
     for bad in [
         "feel free to ask!", "feel free to ask.",
         "don't hesitate to ask.", "just let me know!",
@@ -398,14 +390,12 @@ def _clean(text: str) -> str:
     ]:
         if text.lower().endswith(bad.lower()):
             text = text[:-len(bad)].rstrip(" ,.")
-    # Strip apology phrases that GPT might add despite instructions
-    apology_patterns = [
+    # Strip apologies
+    for pat in [
         r"^i'?m sorry (if|for|about|that)[^.]*\.\s*",
         r"^apologi[sz]e[^.]*\.\s*",
-        r"^i apologi[sz]e[^.]*\.\s*",
         r"^sorry (if|for|about)[^.]*\.\s*",
-    ]
-    for pat in apology_patterns:
+    ]:
         text = re.sub(pat, "", text, flags=re.IGNORECASE)
     return re.sub(r"\n{3,}", "\n\n", text).strip()
 
@@ -419,14 +409,14 @@ def _norm(text: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 _TOPIC_SHORTCUTS: Dict[str, str] = {
-    "pricing":   "how much does fine flow cost and what are the three plans",
-    "price":     "how much does fine flow cost and what are the three plans",
-    "cost":      "how much does fine flow cost and what are the three plans",
+    "pricing":   "how much does fine flow cost and what are the plans",
+    "price":     "how much does fine flow cost and what are the plans",
+    "cost":      "how much does fine flow cost and what are the plans",
     "plans":     "what are the fine flow subscription plans",
     "appeals":   "how do i make an appeal in fine flow",
     "appeal":    "how do i make an appeal in fine flow",
     "fines":     "what happens to a fine when it enters fine flow",
-    "billing":   "how does billing work in fine flow and when am i charged",
+    "billing":   "how does billing work and when am i charged",
     "dashboard": "what does the fine flow dashboard show",
     "drivers":   "how do i add and manage drivers in fine flow",
     "driver":    "how do i add and manage drivers in fine flow",
@@ -497,8 +487,8 @@ _FILL = {
 _FRUSTRATION_RE = re.compile(
     r"\b(why|what\s*\?+|huh|confused|wrong|incorrect|not right|"
     r"that.?s wrong|don.?t understand|makes no sense|what do you mean|"
-    r"what are you (talking|saying)|why redirect|why are you|stop redirect|"
-    r"i don.?t get it|unclear|what\?)\b", re.I)
+    r"what are you (talking|saying)|why redirect|why are you|"
+    r"i don.?t get it|unclear)\b", re.I)
 
 _FF_OK = re.compile(
     r"\b(council|authority|fine|pcn|penalty|fineflow|fine flow|appeal|dispute|"
@@ -541,7 +531,6 @@ _OBJ    = re.compile(
 
 
 def _get_vc(q: str) -> Optional[int]:
-    """Extract vehicle count ONLY when vehicle word is explicitly present."""
     if _DRV_CT.search(q): return None
     raw = None
     m = _VEH_EX.search(q)
@@ -552,40 +541,36 @@ def _get_vc(q: str) -> Optional[int]:
 
 
 def _plan_answer(n: int, p: Profile) -> str:
-    """Deterministic plan recommendation. LLM is never involved in this decision."""
     p.set_fleet(n)
     if n <= 50:
-        name, price = "Essential", "£99"
-        size_desc   = "up to 50 vehicles"
+        name, price, size = "Essential", "£99",  "up to 50 vehicles"
     elif n <= 100:
-        name, price = "Core", "£199"
-        size_desc   = "up to 100 vehicles"
+        name, price, size = "Core",      "£199", "up to 100 vehicles"
     else:
-        name, price = "Elite", "£499"
-        size_desc   = "unlimited vehicles"
+        name, price, size = "Elite",     "£499", "unlimited vehicles"
     return (
         f"With {n} vehicles, the {name} plan at {price} per month is the right fit — "
-        f"covers {size_desc} with everything included and nothing locked away. "
+        f"covers {size} with everything included and nothing locked away. "
         f"Want me to walk you through what's included?"
     )
 
 
 _TMAP = {
-    "pric": "pricing",  "cost": "pricing",   "plan": "pricing",
-    "£":    "pricing",  "vehicle": "pricing", "fleet": "pricing",
-    "fines per month": "fines_volume",        "monthly fines": "fines_volume",
-    "appeal": "appeals","dispute": "appeals",
-    "driver": "driver_mgmt",
-    "referral": "referral","refer": "referral",
-    "security": "security","gdpr": "security","card": "security",
-    "billing": "billing","stripe": "billing",
-    "dashboard": "dashboard",
-    "gmail": "email","inbox": "email",
-    "save": "savings","admin": "savings",
-    "overdue": "overdue","deadline": "overdue",
-    "sign": "sign_up","get started": "sign_up",
-    "assign": "driver_mgmt","upload": "upload",
-    "insight": "dashboard","report": "reports",
+    "pric":"pricing",  "cost":"pricing",  "plan":"pricing",
+    "£":"pricing",     "vehicle":"pricing","fleet":"pricing",
+    "fines per month":"fines_volume",     "monthly fines":"fines_volume",
+    "appeal":"appeals","dispute":"appeals",
+    "driver":"driver_mgmt",
+    "referral":"referral","refer":"referral",
+    "security":"security","gdpr":"security","card":"security",
+    "billing":"billing","stripe":"billing",
+    "dashboard":"dashboard",
+    "gmail":"email","inbox":"email",
+    "save":"savings","admin":"savings",
+    "overdue":"overdue","deadline":"overdue",
+    "sign":"sign_up","get started":"sign_up",
+    "assign":"driver_mgmt","upload":"upload",
+    "insight":"dashboard","report":"reports",
 }
 
 
@@ -597,7 +582,7 @@ def _topic(t: str) -> Optional[str]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# System prompt — no apologies, locked memory, correct pricing
+# System prompt
 # ─────────────────────────────────────────────────────────────────────────────
 
 _SYSTEM = """You are Nova, the AI assistant for Fine Flow — a UK fleet fine management platform.
@@ -605,116 +590,111 @@ _SYSTEM = """You are Nova, the AI assistant for Fine Flow — a UK fleet fine ma
 Fine Flow's mission: Turning penalties into progress.
 Core promise: Cut admin time by up to 80% and never miss a penalty deadline again.
 
-YOUR PERSONALITY:
-Warm, confident and direct — like a knowledgeable colleague who genuinely cares.
-Never robotic. Never pushy. Never apologetic. You give clear, useful answers.
+PERSONALITY: Warm, confident, direct. Like a knowledgeable colleague. Never robotic. Never apologetic. Never pushy.
 
 ══════════════════════════════════════
-ABSOLUTE RULES — NEVER BREAK THESE
+ABSOLUTE RULES
 ══════════════════════════════════════
 
-1. NO APOLOGIES — EVER
-Never say "I'm sorry", "Apologies", "I apologise", "Sorry if", "I understand how confusing".
-These make you sound weak. If you made an error, correct it factually without apologising.
-Example: Instead of "I'm sorry if that was confusing" → say "Let me clarify that."
+1. NO APOLOGIES
+Never say "I'm sorry", "Apologies", "Sorry if", "I understand how confusing".
+If you made an error, correct it factually. Example: instead of "I'm sorry for the confusion" → say "Let me clarify that."
 
-2. SHORT ANSWERS
-2 to 3 sentences. Never write long paragraphs. No bullet lists in conversation.
+2. SHORT ANSWERS — 2 to 3 sentences maximum.
 
-3. USE EXACT CLIENT WORDING when describing Fine Flow:
+3. USE EXACT WORDING:
 "Fine Flow is an automated system for managing fines from start to finish"
 "keeps the entire process organised, accountable, and under control"
 "cut admin time by up to 80%"
 "never miss a penalty deadline"
 
-4. LOCKED MEMORY — TREAT CONFIRMED VALUES AS FACTS
-If the CUSTOMER CONTEXT section below shows fleet size or monthly fines:
-- These are CONFIRMED facts. Reference them directly.
-- NEVER change or contradict these values.
-- NEVER let anything in this conversation overwrite them.
-- If asked "what did I tell you?" → state the confirmed values exactly.
+4. LOCKED MEMORY — TREAT AS FACTS:
+Values in the CUSTOMER CONTEXT section are confirmed and locked.
+NEVER change them. NEVER contradict them. NEVER ask for something already confirmed.
+If asked "what did I tell you?" → state confirmed values exactly.
 
-5. FOLLOW-UP QUESTIONS
-Ask one short relevant question after SOME answers — but NOT every answer.
-Vary them. Never repeat the same question twice in a row. Good examples:
+5. PROGRESSION — NEVER REPEAT WHAT YOU JUST SAID:
+When user says "yes" or "sure" after your answer:
+→ Move the conversation FORWARD. Ask a diagnostic question or take the next logical step.
+→ Do NOT re-explain what you just said.
+→ Do NOT summarise the same topic again.
+
+Examples of correct progression:
+After explaining referrals → "yes" → "Who are you planning to refer — do you have a company in mind?"
+After explaining appeals → "yes" → "What's the fine you're looking to appeal? Which council issued it?"
+After recommending a plan → "yes" → "Every plan includes automatic fine capture, driver matching, deadline tracking and full appeal management. Want to get in touch with the sales team?"
+After explaining billing → "yes" → "Is there a specific charge on your account you'd like to understand?"
+
+6. FOLLOW-UP QUESTIONS — after SOME answers, ask one short relevant question.
+Vary them. Never repeat the same question twice in a row.
 "How many vehicles are in your fleet?"
 "How many fines do you deal with each month?"
 "What does your current process look like?"
 "Is there a particular stage causing the most headaches?"
 "What's the biggest pain point right now?"
 
-6. ON "NO" OR FRUSTRATION
+7. ON "NO" OR FRUSTRATION:
 Do NOT reset. Do NOT say "no problem" and stop.
-Ask a DIFFERENT relevant follow-up. Keep the conversation going.
-Example: User says "why are you asking so many questions?"
-→ "Fair point — let me just answer. What would you like to know about Fine Flow?"
+Ask a DIFFERENT relevant follow-up. Keep conversation going.
 
-7. PAYMENT
-Fine Flow does NOT pay fines. Payment is always by the user on the authority's site.
-Reason: anti-bot protection and card verification make automation impossible.
+8. PAYMENT: Fine Flow does NOT pay fines. Always say NO. Reason: anti-bot protection and card verification.
 
-8. CARD DETAILS
-Fine Flow NEVER stores card details. Say this first when asked.
+9. CARD DETAILS: Never stored. Say this first when asked.
 
-9. PRICING — MEMORISE EXACTLY (3 PLANS ONLY):
+10. PRICING — 3 PLANS ONLY:
 Essential: £99/month
 Core: £199/month
 Elite: £499/month
 Per fine within allowance: £0.75
 Overage: £2.50 per fine
-Pay-as-you-go (no subscription, no monthly fee): £2.75 per fine
-There is NO Advanced plan. There is NO £399 plan. There is NO £2.00 fee.
-All three plans include identical features.
+Pay-as-you-go (no subscription): £2.75 per fine
+NO Advanced plan. NO £399 plan. NO £2.00 fee.
 
-10. APPEALS FLOW — GET THIS RIGHT EVERY TIME:
-Step 1: Driver disputes fine → status = DISPUTED (this is a DRIVER action)
-Step 2: ADMIN reviews → accepts OR rejects
-Step 3: If ADMIN ACCEPTS → Fine Flow generates appeal letter → sends to authority by email → status = UNDER REVIEW
-Step 4: If ADMIN REJECTS → fine returns to CONFIRMED
-NEVER say Fine Flow automatically sends an appeal after a driver disputes. The ADMIN must accept first.
+11. APPEALS FLOW — GET THIS RIGHT:
+Driver disputes → DISPUTED (driver action)
+Admin reviews → accepts OR rejects
+If ACCEPTED → Fine Flow generates appeal letter → sends to authority by EMAIL → UNDER REVIEW
+If REJECTED → back to CONFIRMED
+NEVER say Fine Flow automatically sends appeal after dispute. Admin must accept first.
 
-11. TOPIC SCOPE
-Help with Fine Flow AND UK fleet fine questions (PCNs, councils, TfL, DVLA, etc).
-For unrelated topics: "I'm here to help with fleet fine management — anything about fines, Fine Flow or appeals?"
+12. TOPIC: Help with Fine Flow AND UK fleet fine questions. For unrelated topics say:
+"I'm here to help with fleet fine management — anything about fines, Fine Flow or appeals?"
 
-12. NO HOLLOW ENDINGS
-Never end with "feel free to ask", "don't hesitate", "just let me know", "let me know if you have questions".
-
-13. SMART INSIGHTS
-Fine Flow provides data-driven insights including driver performance analytics, violation type breakdowns, overdue risk analysis and appeal outcome tracking. For detailed configuration questions, direct to ff.sales@fineflow.com.
+13. NO HOLLOW ENDINGS: Never end with "feel free to ask", "don't hesitate", "just let me know".
 
 CONTACT: +47 32 28 50 00 | ff.sales@fineflow.com
 
 ══════════════════════════════════════
-EXAMPLE RESPONSES — COPY THIS TONE
+PROGRESSION EXAMPLES
 ══════════════════════════════════════
 
-User: How do I assign a driver to a fine?
-Nova: Fine Flow does this automatically using your vehicle logs — it matches each fine by vehicle registration, date and time to find who was driving. If no match is found, the fine goes into the unassigned queue and you can assign it manually from the dashboard in a few clicks. Would you like me to explain how the matching logic works?
+[Referrals then "yes"]
+User: how do referrals work
+Nova: When someone subscribes using your referral code, you earn credits based on their fleet size — from 100 for small fleets up to 2,000 for large ones. Hit 5 referrals and you get 10% off your subscription for a year; 25 referrals gets you 20% off for life. Are you planning to refer someone?
+User: yes
+Nova: Great — do you have a company in mind already, or are you still figuring out who to approach?
 
-User: How do I make an appeal?
-Nova: The driver disputes the fine from their dashboard, which sets the status to DISPUTED. Your admin then reviews it and decides whether to accept or reject. If accepted, Fine Flow generates the appeal letter and sends it directly to the issuing authority by email — the status then moves to UNDER REVIEW.
+[Appeals then "yes"]
+User: how do I make an appeal
+Nova: The driver disputes the fine from their dashboard, setting the status to DISPUTED. Your admin reviews it — if they accept, Fine Flow generates the appeal letter and emails it directly to the issuing authority. Status moves to UNDER REVIEW.
+User: yes
+Nova: Is there a specific fine you're looking to appeal? Knowing which council issued it and the reason helps determine how strong the case is.
 
-User: What are smart insights?
-Nova: Smart insights in Fine Flow give you data-driven visibility into your fleet's fine patterns — driver performance, violation trends, overdue risk and appeal outcomes. It helps you see where problems are coming from, not just that they exist. Is there a specific metric you'd like to understand better?
+[Plan recommendation then "yes"]
+User: i have 43 vehicles
+Nova: With 43 vehicles, the Essential plan at £99 per month is the right fit — covers up to 50 vehicles with everything included. Want me to walk you through what's included?
+User: yes
+Nova: Every plan includes automatic fine capture from your inbox, AI-assisted driver matching, deadline tracking, full appeal management and compliance reporting — nothing locked behind a higher tier. Want to get in touch with the sales team to get started?
 
-User: I have a billing problem
-Nova: The key thing to know is that charges apply when a fine enters the system at RECEIVED status — that's when the £0.75 fee applies. Disputes, appeals and reassignments don't create additional charges. For specific account billing issues, the team at ff.sales@fineflow.com can sort it directly. What's the issue you're seeing?
+[Billing then "yes"]
+User: i have a billing problem
+Nova: The key thing to know is that you're charged £0.75 when a fine enters the system at RECEIVED status — disputes, appeals and reassignments don't add extra charges. For account-specific issues, the team at ff.sales@fineflow.com can sort it directly. What's the issue you're seeing?
+User: yes
+Nova: What charge is appearing that you weren't expecting?
 
-User: How do referrals work?
-Nova: When a company signs up using your referral code and subscribes, you earn credits based on their fleet size — from 100 credits for small fleets up to 2,000 for large ones. Hit milestones and you unlock subscription discounts, up to 20% off for life at the Titan tier. Are you planning to refer someone?
-
-User: Why are you asking so many questions?
-Nova: Fair point — let me just answer. What would you like to know about Fine Flow?
-
-User: 54 (with no context)
-Nova: Just to make sure I point you to the right thing — is that the number of vehicles in your fleet, or how many fines you deal with each month?
-
-User: Based on what I told you, what plan do I need?
-Nova: [uses confirmed fleet size from memory] With [X] vehicles, the [Plan] at [£price] per month is the right fit. That covers [description] with everything included.
-
-User: What did I tell you about my business?
-Nova: [recites exactly what's in confirmed memory — fleet size, volume, industry, issues]
+[Memory test]
+User: what did I tell you about my business?
+Nova: [Uses confirmed memory] You mentioned you run a logistics company with 43 vehicles and around 12 fines a month.
 """
 
 
@@ -723,8 +703,8 @@ def _build_sys(p: Profile, mode: str = "") -> str:
     s = p.summary()
     if s:
         parts.append(
-            f"\n══ CUSTOMER CONTEXT (CONFIRMED — DO NOT CHANGE) ══\n{s}\n"
-            "These values are locked. Never contradict them. Never ask for something already confirmed."
+            f"\n══ CUSTOMER CONTEXT [LOCKED — DO NOT CHANGE] ══\n{s}\n"
+            "These are confirmed facts. Reference them naturally. Never ask for something already confirmed."
         )
     if mode:
         parts.append(f"\nMODE: {mode}")
@@ -762,7 +742,10 @@ def _rag(q: str) -> Tuple[str, float]:
         logger.exception("RAG failed"); return "", 0.0
 
 
-def _make_msgs(query: str, ctx: str, hist: List[Dict], p: Profile, mode: str = "", extra: str = "") -> List[Dict]:
+def _make_msgs(
+    query: str, ctx: str, hist: List[Dict],
+    p: Profile, mode: str = "", extra: str = ""
+) -> List[Dict]:
     m = [{"role": "system", "content": _build_sys(p, mode)}]
     m.extend(hist[-8:])
     parts = []
@@ -774,7 +757,7 @@ def _make_msgs(query: str, ctx: str, hist: List[Dict], p: Profile, mode: str = "
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Affirmative + Negative handlers
+# Affirmative handler — PROGRESSES conversation, never repeats
 # ─────────────────────────────────────────────────────────────────────────────
 
 _CLOSE = (
@@ -782,46 +765,96 @@ _CLOSE = (
     "or email ff.sales@fineflow.com — they'll have you sorted quickly."
 )
 
-_EXPAND = {
-    "pricing":             "Explain Fine Flow's 3 plans (Essential £99, Core £199, Elite £499) warmly in 2-3 sentences. Ask how many vehicles if unknown.",
-    "plan_recommendation": "Explain what every Fine Flow plan includes in 2-3 sentences. Do NOT list plans again. Ask if they want to get started.",
-    "appeals":             "Explain the CORRECT appeal flow: driver disputes → DISPUTED → admin accepts/rejects → if accepted, Fine Flow sends appeal letter by email → UNDER REVIEW. 2-3 sentences.",
-    "driver_mgmt":         "Explain how drivers are added (individually or CSV) and matched to fines using vehicle, date and time. 2-3 sentences.",
-    "fines_volume":        "Based on their fine volume, recommend the right plan. Use their actual locked numbers.",
-    "referral":            "Explain referral credits by fleet size and tier discounts up to 20% off for life. 2-3 sentences.",
-    "security":            "Explain GDPR: JWT, bcrypt, AES-256, no card storage, no data sharing. 2-3 sentences.",
-    "billing":             "Explain: charged at RECEIVED status (£0.75), overage £2.50, monthly Stripe billing, credits reset, cooldown on cancel. 2-3 sentences.",
-    "dashboard":           "Explain what the company dashboard shows: overdue fines first, then unassigned, then upcoming deadlines. 2-3 sentences.",
-    "savings":             "Give savings figures using their fleet size if known, otherwise general figures.",
-    "email":               "Explain Gmail connection: OAuth (recommended) or App Password. 2-3 sentences.",
-    "overdue":             "Explain overdue scheduler runs at midnight, fine is flagged and stays visible for immediate action. 2-3 sentences.",
-    "sign_up":             "Give contact: call +47 32 28 50 00 or email ff.sales@fineflow.com.",
-    "upload":              "Explain manual upload option via dashboard. 2-3 sentences.",
-    "reports":             "Explain export options: PDF fine reports, PDF/CSV appeals history, PDF driver reports. 2-3 sentences.",
+# These map last_topic → the NEXT logical question to ask (not a re-explanation)
+_PROGRESS_QUESTIONS: Dict[str, str] = {
+    "referral":            "Do you have a company in mind to refer, or are you still figuring out who to approach?",
+    "appeals":             "Is there a specific fine you're looking to appeal? Knowing which council issued it helps.",
+    "driver_mgmt":         "How many drivers do you currently have in your fleet?",
+    "security":            "Is there a specific data or compliance question you need answered?",
+    "billing":             "What charge is appearing that you weren't expecting?",
+    "dashboard":           "Is there a specific metric or status on the dashboard you'd like explained?",
+    "savings":             "What part of your current process takes the most time each month?",
+    "email":               "Have you already connected your Gmail inbox to Fine Flow?",
+    "overdue":             "Do you have fines right now that are close to their deadline?",
+    "upload":              "Do you prefer to upload fines manually or would you like to connect your inbox?",
+    "reports":             "Which report would be most useful — fine summary, appeals history, or driver violations?",
 }
+
+# For plan recommendation — explain what's included, then offer to connect with sales
+_PLAN_INCLUDE = (
+    "Every plan includes automatic fine capture from your inbox, AI-assisted driver matching, "
+    "deadline tracking, full appeal management and compliance reporting — nothing locked behind a higher tier. "
+    "Want to get in touch with the sales team to get started?"
+)
 
 
 def _aff_response(sid: str, hist: List[Dict], p: Profile) -> str:
     cnt = _inc_aff(sid)
     lt  = _gm(sid, "lt") or ""
 
+    # After social — redirect to topic
     if _gm(sid, "last_was_social"):
         _sm(sid, "last_was_social", False)
         return "What would you like to know about Fine Flow — pricing, how it works, appeals, or something else?"
 
+    # Second consecutive yes on plan/pricing → close the sale
     if cnt >= 2 and lt in ("plan_recommendation", "sign_up", "pricing"):
         _rst_aff(sid)
         return _CLOSE
 
-    prompt = _EXPAND.get(lt, "Expand naturally on the most recent Fine Flow topic in 2-3 sentences. Use confirmed customer data if available.")
+    # Plan recommendation — explain what's included (don't re-list pricing)
+    if lt == "plan_recommendation" and cnt == 1:
+        return _PLAN_INCLUDE
+
+    # Sign up — give contact details
+    if lt == "sign_up":
+        return _CLOSE
+
+    # Pricing first yes — ask fleet size if not known, else recommend
+    if lt == "pricing" and cnt == 1:
+        if p.fleet:
+            return f"With {p.fleet} vehicles you'd be on the {p.plan_name()} plan at {p.plan_price()} per month. Want me to walk you through what's included?"
+        return "How many vehicles are in your fleet? That'll let me point you to the right plan straightaway."
+
+    # For known topics — ask the NEXT logical question (progression)
+    if lt in _PROGRESS_QUESTIONS and cnt == 1:
+        return _PROGRESS_QUESTIONS[lt]
+
+    # Second yes on a progress question → use GPT to go deeper
+    if cnt >= 2:
+        _rst_aff(sid)
+        ctx, _ = _rag(lt.replace("_", " ")) if lt else ("", 0.0)
+        extra  = (
+            f"The user has said yes twice in a row about '{lt}'. "
+            f"Move the conversation forward meaningfully. "
+            f"Do NOT re-explain what was already covered. "
+            f"Ask a specific question that helps you understand their exact situation better. "
+            f"2 sentences max."
+        )
+        m = [{"role": "system", "content": _build_sys(p)}]
+        m.extend(hist[-8:])
+        parts = []
+        if ctx: parts.append(f"Fine Flow knowledge base:\n{ctx}")
+        parts.append(f"Instruction: {extra}")
+        m.append({"role": "user", "content": "\n\n".join(parts)})
+        return _ai(m, 120) or _CLOSE
+
+    # Fallback — use GPT with explicit progression instruction
     ctx, _ = _rag(lt.replace("_", " ")) if lt else ("", 0.0)
-    m      = [{"role": "system", "content": _build_sys(p, "Warm, concise. 2-3 sentences. One natural question if helpful.")}]
+    extra  = (
+        f"User said yes after a conversation about '{lt}'. "
+        f"DO NOT re-explain '{lt}'. DO NOT summarise what you just said. "
+        f"Instead, ask a specific diagnostic question that moves the conversation forward. "
+        f"Examples: ask about their specific situation, their timeline, or what they want to do next. "
+        f"1-2 sentences only."
+    )
+    m = [{"role": "system", "content": _build_sys(p)}]
     m.extend(hist[-8:])
-    parts  = []
+    parts = []
     if ctx: parts.append(f"Fine Flow knowledge base:\n{ctx}")
-    parts.append(f"Instruction: {prompt}")
+    parts.append(f"Instruction: {extra}")
     m.append({"role": "user", "content": "\n\n".join(parts)})
-    return _ai(m, 180) or "What would you like to know more about?"
+    return _ai(m, 120) or "What would you like to explore next?"
 
 
 def _neg_response(sid: str, hist: List[Dict], p: Profile) -> str:
@@ -830,8 +863,8 @@ def _neg_response(sid: str, hist: List[Dict], p: Profile) -> str:
     ctx, _ = _rag(lt) if lt else ("", 0.0)
     extra  = (
         f"User said 'no'. Last topic: '{lt}'. Last question: '{last_q}'. "
-        f"Do NOT reset. Do NOT say 'no problem'. "
-        f"Acknowledge briefly and ask a DIFFERENT relevant follow-up. Warm and natural. No apology."
+        f"Do NOT reset. Do NOT say 'no problem'. Do NOT apologise. "
+        f"Acknowledge briefly and ask a DIFFERENT relevant follow-up. Confident and warm."
     )
     m   = _make_msgs("no", ctx, hist[-8:], p, extra=extra)
     return _ai(m, 120) or "Fair enough — what's the biggest challenge with your current fine management setup?"
@@ -841,13 +874,12 @@ def _frustration_response(sid: str, query: str, hist: List[Dict], p: Profile) ->
     lt     = (_gm(sid, "lt") or "").lower()
     ctx, _ = _rag(lt) if lt else ("", 0.0)
     extra  = (
-        f"User is confused or frustrated: '{query}'. "
-        f"Do NOT apologise. Do NOT say 'I'm sorry'. "
-        f"Acknowledge their point factually, correct any error, and ask a clear helpful question. "
-        f"2 sentences max. Confident and warm."
+        f"User seems confused or frustrated: '{query}'. "
+        f"Do NOT apologise. Correct any error factually. "
+        f"Ask a clear helpful question to get back on track. 2 sentences max."
     )
     m = _make_msgs(query, ctx, hist[-8:], p, extra=extra)
-    return _ai(m, 100) or "Let me clarify that. What would you like to know about Fine Flow?"
+    return _ai(m, 100) or "Let me clarify. What would you like to know about Fine Flow?"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -874,9 +906,9 @@ def build_response(
     def _popup(a: str) -> Dict[str, Any]:
         return {"answer": a, "confidence": 0.2, "trigger_ticket_popup": True}
 
-    # ══════════════════════════════════════════════════════════════════
-    # TIER 1 — Deterministic (always before off-topic guard)
-    # ══════════════════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════
+    # TIER 1 — Deterministic (greetings/identity before off-topic)
+    # ══════════════════════════════════════════════════════════════
 
     if nq in _GREET:
         _rst(session_id)
@@ -906,7 +938,7 @@ def build_response(
         _rst_aff(session_id)
         return _ok("Is there anything about Fine Flow I can help you with?")
 
-    # Frustration / confusion — empathy without apology
+    # Frustration — empathy without apology
     if _FRUSTRATION_RE.search(query) and len(query.split()) <= 10:
         _push(session_id, "user", query, user_id)
         a = _clean(_frustration_response(session_id, query, _hist(session_id, user_id)[:-1], p))
@@ -937,15 +969,18 @@ def build_response(
         _push(session_id, "assistant", a, user_id)
         return _ok(a)
 
-    # Topic shortcuts — single recognised words
+    # Topic shortcuts
     if nq in _TOPIC_SHORTCUTS:
         expanded = _TOPIC_SHORTCUTS[nq]
         _push(session_id, "user", query, user_id)
         ctx, score = _rag(expanded)
         hist       = _hist(session_id, user_id)
-        extra      = f"Answer this directly and warmly in 2-3 sentences: {expanded}. Ask one relevant follow-up question."
-        msgs       = _make_msgs(expanded, ctx, hist[:-1], p, extra=extra)
-        ans        = _clean(_ai(msgs, 160) or "I can help with that. What specifically would you like to know?")
+        extra      = (
+            f"Answer this directly and warmly in 2-3 sentences: {expanded}. "
+            f"Then ask ONE short relevant follow-up question."
+        )
+        msgs = _make_msgs(expanded, ctx, hist[:-1], p, extra=extra)
+        ans  = _clean(_ai(msgs, 160) or "I can help with that. What specifically would you like to know?")
         _push(session_id, "assistant", ans, user_id)
         t = _topic(nq) or _topic(ans)
         if t: _sm(session_id, "lt", t)
@@ -953,7 +988,7 @@ def build_response(
         if "?" in ans: _sm(session_id, "last_nova_q", ans)
         return _ok(ans, score if score else 0.9)
 
-    # Explicit vehicle count (word present)
+    # Explicit vehicle count (word present in message)
     vc = _get_vc(query)
     if vc == -1:
         a = "That number doesn't look right — could you double check? How many vehicles are in your fleet?"
@@ -969,7 +1004,7 @@ def build_response(
         _sm(session_id, "last_nova_q", a)
         return _ok(a)
 
-    # Bare number — ALWAYS ask for clarification unless context is unambiguous
+    # Bare number — ALWAYS ask when ambiguous
     bm = _VEH_BR.match(query.strip())
     if bm:
         n        = int(bm.group())
@@ -1006,7 +1041,6 @@ def build_response(
             return _ok(a)
 
         else:
-            # Ambiguous — ALWAYS ask. No exceptions.
             a = "Just to make sure I point you in the right direction — is that the number of vehicles in your fleet, or how many fines you deal with each month?"
             _push(session_id, "user", query, user_id)
             _push(session_id, "assistant", a, user_id)
@@ -1023,7 +1057,7 @@ def build_response(
         _sm(session_id, "lt", "sign_up")
         return _ok(a.strip())
 
-    # Affirmative
+    # Affirmative — PROGRESS, don't repeat
     if nq in _AFF:
         _push(session_id, "user", query, user_id)
         a = _clean(_aff_response(session_id, _hist(session_id, user_id)[:-1], p))
@@ -1031,9 +1065,9 @@ def build_response(
         _sm(session_id, "last_nova_q", "")
         return _ok(a)
 
-    # ══════════════════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════
     # TIER 2 — RAG + GPT-4o
-    # ══════════════════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════
 
     _rst_aff(session_id)
     _push(session_id, "user", query, user_id)
@@ -1046,7 +1080,7 @@ def build_response(
         extra = (
             "Use the customer's confirmed fleet size, volume and problems. Reference their numbers directly. No generic copy."
             if p.fleet or p.volume or p.issues
-            else "Ask their fleet size and monthly fine volume first — you need specifics to give a useful answer."
+            else "Ask their fleet size and monthly fine volume first — you need specifics."
         )
     elif _OBJ.search(query):
         mode  = "SUPPORT"

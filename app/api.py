@@ -45,7 +45,7 @@ app.add_middleware(
 # Request/response models
 # ─────────────────────────────────────────────────────────────────────────────
 
-class CustomerRequest(BaseModel):
+class CustomerRequest(BaseModel):    
     name:       str
     email:      str
     support_id: str = ""

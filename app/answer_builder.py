@@ -341,6 +341,9 @@ def _save_turn(sid: str, role: str, content: str, uid: int = 0) -> None:
     """Save to both memory and MySQL."""
     _mem_push(sid, role, content)
     db_save_message(sid, "user" if role == "user" else "bot", content, uid)
+    # FIX: track the last bot answer so progression logic can avoid repeating it
+    if role != "user":
+        _sm(sid, "last_bot_answer", content)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -361,7 +364,8 @@ _ISS = [
     (re.compile(r"\b(too\s+much\s+(admin|time|work))\b", re.I),              "too much admin"),
 ]
 _FINES_CTX = {"how many fines", "fines per month", "fines a month", "monthly fines", "fines do you"}
-_VEH_CTX   = {"how many vehicles", "fleet size", "vehicles are in", "how big is your fleet"}
+_VEH_CTX   = {"how many vehicles", "fleet size", "vehicles are in", "how big is your fleet",
+              "vehicles are you running"}
 
 
 def _upd(sid: str, q: str) -> None:
@@ -380,11 +384,23 @@ def _upd(sid: str, q: str) -> None:
 
 
 def _resolve_bare_number(n: int, sid: str) -> Optional[str]:
+    """
+    FIX: the last bot message can mention BOTH fines and vehicles
+    ("Got it — 45 fines a month. How many vehicles are in your fleet?").
+    Whichever context phrase appears LAST is the question actually being asked.
+    """
     last_q = (_gm(sid, "last_nova_q") or "").lower()
+    best, best_pos = None, -1
     for h in _FINES_CTX:
-        if h in last_q: return "fines"
+        pos = last_q.rfind(h)
+        if pos > best_pos:
+            best, best_pos = "fines", pos
     for h in _VEH_CTX:
-        if h in last_q: return "vehicle"
+        pos = last_q.rfind(h)
+        if pos > best_pos:
+            best, best_pos = "vehicle", pos
+    if best:
+        return best
     lt = (_gm(sid, "lt") or "").lower()
     if lt in {"pricing", "plan_recommendation", "cost"}: return "vehicle"
     if lt in {"fines_volume", "savings"}:                return "fines"
@@ -471,6 +487,11 @@ _FILL = {
     "noted","wow","woah","omg","anything","something","whatever",
 }
 
+# FIX: short "yes + something" messages ("yes i have", "yes traffic") are affirmatives
+_AFF_PREFIX = re.compile(r"^(yes|yeah|yep|yup|sure)\b")
+# FIX: short "no + something" messages ("no i have more fines") are negatives with context
+_NEG_PREFIX = re.compile(r"^(no|nope|nah|not really)\b")
+
 _FF_OK = re.compile(
     r"\b(council|authority|fine|pcn|penalty|fineflow|fine flow|appeal|dispute|"
     r"driver|fleet|vehicle|overage|allowance|billing|subscription|payment|"
@@ -503,6 +524,10 @@ _CONV   = re.compile(r"\b(convince|persuade|sell me|why should i|why buy|is it w
 _OBJ    = re.compile(r"\b(expensive|too much|too costly|already use spreadsheet|we manage manually|we handle fines ourselves)\b", re.I)
 _FRUST  = re.compile(r"\b(why|what\s*\?+|huh|confused|wrong|not right|don.?t understand|what do you mean|what are you saying|why redirect|i don.?t get it)\b", re.I)
 
+# FIX: typo-tolerant clarification words for the "vehicles or fines?" question
+_CLAR_VEH  = re.compile(r"(veh|fleet|van|truck|lorr|car)", re.I)
+_CLAR_FINE = re.compile(r"(fine|pcn|penalt|ticket)", re.I)
+
 
 def _get_vc(q: str) -> Optional[int]:
     if _DRV.search(q): return None
@@ -519,9 +544,22 @@ def _plan_answer(n: int, p: Profile) -> str:
     if n <= 50:    name, price, size = "Essential", "£99",  "up to 50 vehicles"
     elif n <= 100: name, price, size = "Core",      "£199", "up to 100 vehicles"
     else:          name, price, size = "Elite",     "£499", "unlimited vehicles"
-    return (f"With {n} vehicles, the {name} plan at {price} per month is the right fit — "
+    # FIX: reference already-confirmed fine volume so the reply shows memory
+    lead = (f"With {n} vehicles and {p.volume} fines a month" if p.volume
+            else f"With {n} vehicles")
+    return (f"{lead}, the {name} plan at {price} per month is the right fit — "
             f"covers {size} with everything included and nothing locked away. "
             f"Want me to walk you through what's included?")
+
+
+def _fines_answer(n: int, p: Profile) -> str:
+    p.set_volume(n)
+    if p.fleet:
+        cost = round(n * 0.75, 2)
+        return (f"Got it — {n} fines a month. On the {p.plan_name()} at {p.plan_price()}, "
+                f"that's about £{cost:.2f} in processing costs within your allowance. "
+                f"Want me to walk you through everything included?")
+    return f"Got it — {n} fines a month. How many vehicles are in your fleet so I can point you to the right plan?"
 
 
 _TMAP = {
@@ -612,6 +650,10 @@ This triggers email capture.
 Essential: £99/month | Core: £199/month | Elite: £499/month
 Per fine within allowance: £0.75 | Overage: £2.50 | PAYG: £2.75 (no subscription)
 NO Advanced plan. NO £399. NO £2.00 fee.
+All three plans have IDENTICAL features. They differ ONLY by vehicle capacity:
+Essential up to 50 vehicles | Core up to 100 | Elite unlimited.
+NEVER say a higher plan has "more features", "extra features" or "higher allowances".
+Fine volume does NOT change the plan — only fleet size does. More fines = more £0.75 processing fees, same plan.
 
 12. APPEALS — CORRECT FLOW:
 Driver disputes → DISPUTED (driver action)
@@ -714,33 +756,71 @@ _PROGRESS: Dict[str, str] = {
 }
 
 
-def _aff_response(sid: str, hist: List[Dict], p: Profile) -> str:
-    cnt = _inc_aff(sid)
-    lt  = _gm(sid, "lt") or ""
+def _aff_response(sid: str, hist: List[Dict], p: Profile, query: str = "") -> str:
+    cnt       = _inc_aff(sid)
+    lt        = _gm(sid, "lt") or ""
+    last_ans  = _gm(sid, "last_bot_answer") or ""
 
+    # After social — redirect to topic
     if _gm(sid, "last_was_social"):
         _sm(sid, "last_was_social", False)
         return "What would you like to know about Fine Flow — pricing, how it works, appeals, or something else?"
 
-    if cnt >= 2 and lt in ("plan_recommendation", "sign_up", "pricing"):
-        _rst_aff(sid); return _CLOSE
+    # After "no" was asked a counter question → user now says yes to THAT question
+    # The lt might still be plan_recommendation but last question was about pain points
+    last_q = (_gm(sid, "last_nova_q") or "").lower()
+    if ("headache" in last_q or "pain point" in last_q or "challenge" in last_q
+            or "current process" in last_q or "causing" in last_q):
+        # User confirmed they have a problem — ask which stage
+        return ("Which part of the process is the biggest issue — capturing fines, assigning drivers, "
+                "tracking deadlines, or managing appeals?")
 
-    if lt == "plan_recommendation" and cnt == 1:
-        return _PLAN_INCLUDE
-    if lt == "sign_up":
-        return _CLOSE
-    if lt == "pricing" and cnt == 1:
-        if p.fleet:
-            return (f"With {p.fleet} vehicles you'd be on the {p.plan_name()} at {p.plan_price()}/month. "
-                    f"Want me to walk you through what's included?")
-        return "How many vehicles are in your fleet? That'll let me point you to the right plan."
-    if lt in _PROGRESS and cnt == 1:
-        return _PROGRESS[lt]
+    # FIX: "yes" to "Is there a specific fine you're looking to appeal?" → move forward
+    if "specific fine" in last_q:
+        return ("Which council issued it, and when is the payment deadline? "
+                "That tells me the best route for the appeal.")
 
-    # GPT for everything else — with explicit instruction not to repeat
+    # FIX: canned progression only for a bare "yes" — "yes fines" carries meaning,
+    # so it must go to the GPT fallback below with the extra words as context
+    if not query:
+        # Plan recommendation flow
+        if lt == "plan_recommendation":
+            if cnt == 1:
+                # Only send _PLAN_INCLUDE if it wasn't the last thing said
+                if _PLAN_INCLUDE[:40] not in last_ans:
+                    return _PLAN_INCLUDE
+                else:
+                    # Already said plan includes — close the sale
+                    _rst_aff(sid); return _CLOSE
+            else:
+                _rst_aff(sid); return _CLOSE
+
+        if lt == "sign_up":
+            _rst_aff(sid); return _CLOSE
+
+        if lt == "pricing" and cnt == 1:
+            if p.fleet:
+                return (f"With {p.fleet} vehicles you'd be on the {p.plan_name()} at {p.plan_price()}/month. "
+                        f"Want me to walk you through what's included?")
+            return "How many vehicles are in your fleet? That'll let me point you to the right plan."
+
+        if cnt >= 2 and lt in ("plan_recommendation", "sign_up", "pricing"):
+            _rst_aff(sid); return _CLOSE
+
+        if lt in _PROGRESS and cnt == 1:
+            candidate = _PROGRESS[lt]
+            # Don't repeat if it was already the last answer
+            if candidate[:30] not in last_ans:
+                return candidate
+
+    # GPT fallback — explicit instruction not to repeat last message
     ctx, _ = _rag(lt.replace("_", " ")) if lt else ("", 0.0)
-    extra  = (f"User said yes after topic '{lt}'. DO NOT repeat what was just said. "
-              f"Move the conversation FORWARD. Ask a specific question about their situation. "
+    extra  = (f"User said yes{(' and added: ' + repr(query)) if query else ''}. Last topic: '{lt}'. "
+              f"Your last question was: '{last_q[:120]}'. "
+              f"{'Treat their added words as the answer to that question and respond to THAT. ' if query else ''}"
+              f"IMPORTANT: Do NOT repeat or rephrase this message which was already sent: "
+              f"'{last_ans[:100]}'. "
+              f"Move FORWARD — ask one specific question about their situation. "
               f"1-2 sentences only.")
     m = [{"role": "system", "content": _build_sys(p)}]
     m.extend(hist[-10:])
@@ -748,18 +828,36 @@ def _aff_response(sid: str, hist: List[Dict], p: Profile) -> str:
     if ctx: parts.append(f"Fine Flow knowledge base:\n{ctx}")
     parts.append(f"Instruction: {extra}")
     m.append({"role": "user", "content": "\n\n".join(parts)})
-    return _ai(m, 120) or "What would you like to explore next?"
+    return _ai(m, 120) or "What specific part of fine management would you like to explore?"
 
 
-def _neg_response(sid: str, hist: List[Dict], p: Profile) -> str:
+def _neg_response(sid: str, hist: List[Dict], p: Profile, query: str = "no") -> str:
     lt     = (_gm(sid, "lt") or "").lower()
     last_q = (_gm(sid, "last_nova_q") or "").lower()
+
+    # After plan recommendation "no" → clear plan topic so next "yes" doesn't loop back to plan
+    if lt in ("plan_recommendation", "sign_up"):
+        _sm(sid, "lt", "general")
+    _rst_aff(sid)   # reset affirmative count so next "yes" starts fresh
+
+    # FIX: steer the counter-question toward whatever the profile is still missing
+    if not p.fleet:
+        missing = "Ask how many vehicles are in their fleet."
+    elif not p.volume:
+        missing = "Ask how many fines they deal with each month."
+    else:
+        missing = ("Good options: ask about their current process, biggest pain point, "
+                   "or what stage causes most admin.")
+
     ctx, _ = _rag(lt) if lt else ("", 0.0)
-    extra  = (f"User said 'no'. Last topic: '{lt}'. Last question: '{last_q}'. "
-              f"Do NOT reset. Do NOT say 'no problem'. "
-              f"Acknowledge briefly and ask a DIFFERENT relevant follow-up. Confident and warm.")
-    return _ai(_make_msgs("no", ctx, hist[-10:], p, extra=extra), 120) \
-           or "Fair enough — what's the biggest challenge with your current fine management setup?"
+    extra  = (f"User said: '{query}'. Last topic: '{lt}'. Last question asked: '{last_q}'. "
+              f"Respond to what they actually said. "
+              f"Do NOT say 'no problem' and stop. Do NOT repeat previous messages. "
+              f"Acknowledge briefly and ask ONE different relevant follow-up question. "
+              f"{missing} "
+              f"Confident and warm. 1-2 sentences only.")
+    return _ai(_make_msgs(query, ctx, hist[-10:], p, extra=extra), 120) \
+           or "Got it. Is there a particular stage in your current fine management process causing the most headaches?"
 
 
 def _frust_response(sid: str, query: str, hist: List[Dict], p: Profile) -> str:
@@ -783,7 +881,8 @@ def _clean(text: str) -> str:
     text = text.replace("→", "to").replace("->", "to").replace("`", "")
     for bad in ["feel free to ask!", "feel free to ask.",
                 "don't hesitate to ask.", "just let me know!",
-                "just let me know.", "please let me know if you need anything."]:
+                "just let me know.", "please let me know if you need anything.",
+                "let me know!", "let me know.", "i'm here to help!", "i'm here to help."]:
         if text.lower().endswith(bad.lower()):
             text = text[:-len(bad)].rstrip(" ,.")
     for pat in [r"^i'?m sorry[^.]*\.\s*", r"^apologi[sz]e[^.]*\.\s*", r"^sorry[^.]*\.\s*"]:
@@ -814,6 +913,10 @@ def build_response(
     p  = _pro(session_id)
     _upd(session_id, query)
 
+    # FIX: "how are you" flag must not leak into later turns ("appeals" → "yes")
+    if nq not in _SOC:
+        _sm(session_id, "last_was_social", False)
+
     def _ok(a: str, c: float = 1.0) -> Dict[str, Any]:
         return {"answer": a, "confidence": c,
                 "trigger_ticket_popup": False, "request_email": False}
@@ -840,12 +943,31 @@ def build_response(
         _save_turn(session_id, "assistant", a, user_id)
         return _ok(a)
 
+    # FIX: answer to "is that vehicles or fines?" clarification
+    pending_n = _gm(session_id, "pending_number")
+    if pending_n and len(nq.split()) <= 4:
+        if _CLAR_VEH.search(nq) and not _CLAR_FINE.search(nq):
+            _sm(session_id, "pending_number", None)
+            _rst_aff(session_id)
+            a = _plan_answer(int(pending_n), p)
+            _save_turn(session_id, "user", query, user_id); _save_turn(session_id, "assistant", a, user_id)
+            _sm(session_id, "lt", "plan_recommendation"); _sm(session_id, "last_nova_q", a)
+            return _ok(a)
+        if _CLAR_FINE.search(nq):
+            _sm(session_id, "pending_number", None)
+            _rst_aff(session_id)
+            a = _fines_answer(int(pending_n), p)
+            _save_turn(session_id, "user", query, user_id); _save_turn(session_id, "assistant", a, user_id)
+            _sm(session_id, "lt", "fines_volume"); _sm(session_id, "last_nova_q", a)
+            return _ok(a)
+
     # ══════════════════════════════════════════════════════════════
     # TIER 1 — Deterministic (always before off-topic guard)
     # ══════════════════════════════════════════════════════════════
 
     if nq in _GREET:
-        _rst(session_id)
+        # FIX: greeting must NOT wipe profile/memory — only reset affirmative counter
+        _rst_aff(session_id)
         a = "Hey! I'm Nova — Fine Flow's assistant. What can I help you with today?"
         _save_turn(session_id, "user", query, user_id)
         _save_turn(session_id, "assistant", a, user_id)
@@ -872,8 +994,8 @@ def build_response(
         _rst_aff(session_id)
         return _ok("Is there anything about Fine Flow I can help you with?")
 
-    # Frustration
-    if _FRUST.search(query) and len(query.split()) <= 10:
+    # Frustration (FIX: not for sales questions like "why should i buy")
+    if _FRUST.search(query) and len(query.split()) <= 10 and not _CONV.search(query):
         _save_turn(session_id, "user", query, user_id)
         a = _clean(_frust_response(session_id, query, _get_hist(session_id, user_id)[:-1], p))
         _save_turn(session_id, "assistant", a, user_id)
@@ -893,11 +1015,16 @@ def build_response(
         return _ok(a)
 
     # Negative — counter question, never reset
-    if nq in _NEG:
+    # FIX: also catch short "no ..." messages ("no i have more fines")
+    if nq in _NEG or (_NEG_PREFIX.match(nq) and len(nq.split()) <= 6
+                      and not _FINES_RE.search(query) and _get_vc(query) is None):
         _save_turn(session_id, "user", query, user_id)
         _rst_aff(session_id)
-        a = _clean(_neg_response(session_id, _get_hist(session_id, user_id)[:-1], p))
+        a = _clean(_neg_response(session_id, _get_hist(session_id, user_id)[:-1], p,
+                                 "no" if nq in _NEG else query))
         _save_turn(session_id, "assistant", a, user_id)
+        # FIX: remember the counter question so the next "yes" answers THAT question
+        _sm(session_id, "last_nova_q", a if "?" in a else "")
         return _ok(a)
 
     # Topic shortcuts
@@ -929,6 +1056,18 @@ def build_response(
         _sm(session_id, "lt", "plan_recommendation"); _sm(session_id, "last_nova_q", a)
         return _ok(a)
 
+    # FIX: explicit fine count ("i got 100 fines", "we get 45 pcns a month")
+    fm = _FINES_RE.search(query)
+    if fm and len(query.split()) <= 12:
+        n = int(fm.group(1))
+        if 0 < n < 10_000:
+            p.volume = n   # user stated it explicitly — overrides earlier value
+            _rst_aff(session_id)
+            a = _fines_answer(n, p)
+            _save_turn(session_id, "user", query, user_id); _save_turn(session_id, "assistant", a, user_id)
+            _sm(session_id, "lt", "fines_volume"); _sm(session_id, "last_nova_q", a)
+            return _ok(a)
+
     # Bare number
     bm = _VEH_BR.match(query.strip())
     if bm:
@@ -941,22 +1080,17 @@ def build_response(
             _sm(session_id, "lt", "plan_recommendation"); _sm(session_id, "last_nova_q", a)
             return _ok(a)
         elif ctx_type == "fines" and 0 < n < 10_000:
-            p.set_volume(n)
             _rst_aff(session_id)
-            if p.fleet:
-                cost = round(n * 0.75, 2)
-                a = (f"Got it — {n} fines a month. On the {p.plan_name()} at {p.plan_price()}, "
-                     f"that's about £{cost:.2f} in processing costs within your allowance. "
-                     f"Want me to walk you through everything included?")
-            else:
-                a = f"Got it — {n} fines a month. How many vehicles are in your fleet so I can point you to the right plan?"
+            a = _fines_answer(n, p)
             _save_turn(session_id, "user", query, user_id); _save_turn(session_id, "assistant", a, user_id)
             _sm(session_id, "lt", "fines_volume"); _sm(session_id, "last_nova_q", a)
             return _ok(a)
         else:
             a = "Just to make sure — is that the number of vehicles in your fleet, or how many fines you deal with each month?"
             _save_turn(session_id, "user", query, user_id); _save_turn(session_id, "assistant", a, user_id)
-            _sm(session_id, "last_nova_q", a)
+            # FIX: keep the number so a "vehicles"/"fines" reply can resolve it
+            _sm(session_id, "pending_number", n)
+            _sm(session_id, "last_nova_q", "")
             return _ok(a)
 
     # Purchase intent
@@ -966,14 +1100,17 @@ def build_response(
         a   = f"To get started, call the team on +47 32 28 50 00 or email ff.sales@fineflow.com — they'll get you sorted quickly.{sfx}"
         _save_turn(session_id, "user", query, user_id); _save_turn(session_id, "assistant", a, user_id)
         _sm(session_id, "lt", "sign_up")
+        _sm(session_id, "last_nova_q", a if sfx else "")
         return _ok(a.strip())
 
     # Affirmative — progress, never repeat
-    if nq in _AFF:
+    # FIX: also catch short "yes ..." messages ("yes i have", "yes traffic")
+    if nq in _AFF or (_AFF_PREFIX.match(nq) and len(nq.split()) <= 4):
         _save_turn(session_id, "user", query, user_id)
-        a = _clean(_aff_response(session_id, _get_hist(session_id, user_id)[:-1], p))
+        extra_q = "" if nq in _AFF else query
+        a = _clean(_aff_response(session_id, _get_hist(session_id, user_id)[:-1], p, extra_q))
         _save_turn(session_id, "assistant", a, user_id)
-        _sm(session_id, "last_nova_q", "")
+        _sm(session_id, "last_nova_q", a if "?" in a else "")
         return _ok(a)
 
     # ══════════════════════════════════════════════════════════════
@@ -1020,8 +1157,6 @@ def build_response(
     ]
     is_unknown = any(ph in ans.lower() for ph in unknown_phrases) and score < 0.4
 
-    _save_turn(session_id, "assistant", ans, user_id)
-
     if "?" in ans: _sm(session_id, "last_nova_q", ans)
     t = _topic(query) or _topic(ans)
     if t: _sm(session_id, "lt", t)
@@ -1032,10 +1167,15 @@ def build_response(
         # Ask for email so team can follow up
         _sm(session_id, "awaiting_email", True)
         _sm(session_id, "pending_question", query)
-        followup = ans + " Could you share your email address and I'll make sure the Fine Flow team gets back to you directly?"
+        # FIX: don't append the email request if GPT already asked for it; save once
+        if "email" in ans.lower():
+            followup = ans
+        else:
+            followup = ans + " Could you share your email address and I'll make sure the Fine Flow team gets back to you directly?"
         _save_turn(session_id, "assistant", followup, user_id)
         return _email_req(followup)
 
+    _save_turn(session_id, "assistant", ans, user_id)
     return {"answer": ans, "confidence": conf,
             "trigger_ticket_popup": False, "request_email": False}
 
@@ -1046,4 +1186,4 @@ def answer_sync(q: str, session_id: str = "default", user_id: int = 0) -> Dict[s
     except Exception:
         logger.exception("Crash")
         return {"answer": "Something went wrong. Please try again.",
-                "confidence": 0.0, "trigger_ticket_popup": False, "request_email": False}s
+                "confidence": 0.0, "trigger_ticket_popup": False, "request_email": False}

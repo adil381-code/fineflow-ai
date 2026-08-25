@@ -462,3 +462,50 @@ json.decoder.JSONDecodeError: Invalid control character at: line 20 column 436 (
 2026-08-25 14:46:33,967 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
 2026-08-25 15:34:20,890 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
 2026-08-25 15:34:25,936 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
+2026-08-25 16:14:22,865 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-08-25 16:14:27,979 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
+2026-08-25 16:15:06,002 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
+2026-08-25 16:15:14,362 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
+2026-08-25 16:15:21,871 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
+2026-08-25 16:16:02,225 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
+2026-08-25 16:16:07,955 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
+2026-08-25 16:16:14,505 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
+2026-08-25 16:16:41,847 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
+2026-08-25 16:16:46,874 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
+2026-08-25 16:17:09,603 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
+2026-08-25 16:17:14,621 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
+2026-08-25 16:17:19,636 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
+2026-08-25 16:18:10,024 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
+2026-08-25 16:18:15,047 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
+2026-08-25 16:18:22,612 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
+2026-08-25 16:18:38,388 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
+2026-08-25 16:18:43,411 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
+2026-08-25 16:18:48,429 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 'in2.fcomet.com' (timed out)")
+2026-08-25 16:33:55,462 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-08-25 16:33:56,710 WARNING MySQL unavailable: (1044, "Access denied for user 'mradevon_adeel'@'154.192.21.113' to database 'mradevon_FFchatbot'")
+2026-08-25 16:38:37,775 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-08-25 16:38:38,878 WARNING MySQL unavailable: (1044, "Access denied for user 'mradevon_adeel'@'154.192.21.113' to database 'mradevon_FFchatbot'")
+2026-08-25 16:48:32,015 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-08-25 16:48:33,317 INFO MySQL connected
+2026-08-25 16:55:14,085 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-08-25 16:55:15,472 INFO MySQL connected
+2026-08-25 16:59:31,486 INFO MySQL connected
+2026-08-25 16:59:32,109 WARNING db_load_history: read of closed file
+2026-08-25 16:59:33,637 INFO MySQL connected
+2026-08-25 16:59:33,639 WARNING db_load_history: (2006, "MySQL server has gone away (SSLError(1, '[SSL] internal error (_ssl.c:2426)'))")
+2026-08-25 16:59:35,174 INFO MySQL connected
+2026-08-25 16:59:35,492 WARNING db_save_message: (2006, "MySQL server has gone away (SSLEOFError(8, 'EOF occurred in violation of protocol (_ssl.c:2426)'))")
+2026-08-25 16:59:36,915 INFO MySQL connected
+2026-08-25 16:59:53,709 INFO MySQL connected
+2026-08-25 16:59:53,712 WARNING db_save_message: (2006, "MySQL server has gone away (SSLError(1, '[SSL] internal error (_ssl.c:2426)'))")
+2026-08-25 16:59:55,141 INFO MySQL connected
+2026-08-25 17:03:47,640 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-08-25 17:03:49,338 INFO MySQL connected
+2026-08-25 17:04:27,169 WARNING db_load_history: [WinError 10038] An operation was attempted on something that is not a socket
+2026-08-25 17:04:28,748 INFO MySQL connected
+2026-08-25 17:05:07,467 WARNING db_load_history: 'NoneType' object has no attribute 'settimeout'
+2026-08-25 17:05:09,000 INFO MySQL connected
+2026-08-25 17:05:09,615 WARNING db_save_message: 'NoneType' object has no attribute 'settimeout'
+2026-08-25 17:05:11,048 INFO MySQL connected
+2026-08-25 17:25:56,285 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-08-25 17:25:57,831 INFO MySQL connected

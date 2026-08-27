@@ -1,225 +1,235 @@
 # app/api.py
 """
-FineFlow Nova API — Production with MySQL Memory + Ticketing
-==============================================================
-Endpoints:
-  POST /customer          - find or create user by email
-  ASK /ask               - send message, get answer (+ ticket popup flag)
-  GET  /history/{user_id}  - load full chat history for a user
-  POST /ticket              - create a support ticket
+FineFlow Nova API
+=================
+POST /customer                  find-or-create user by email → user_id (migrates guest session if given)
+POST /ask   | GET /ask          chat, full answer in one JSON
+POST /ask/stream                chat, Server-Sent Events: {"delta": "..."} ... {"done": true, ...}
+GET  /history/{user_id}         full history for a logged-in user
+POST /ticket                    manual support ticket
+GET  /health                    liveness + DB + index status
+POST /admin/ingest              raw → docs_txt → rebuild index   (X-Admin-Token)
+POST /admin/build_index?force=  rebuild index                    (X-Admin-Token)
 
-Guest users: omit user_id (or send 0) — in-memory session only, nothing saved.
-Logged-in users: pass user_id returned from /customer — full MySQL persistence.
+Guests: send the same session_id every request (frontend keeps it in localStorage).
+Logged-in: pass user_id from /customer; session becomes user_{id}.
 """
 
+import json
 import os
+import threading
+import time
 import uuid
-from fastapi import FastAPI, Query, HTTPException
-from fastapi.responses import JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
+from collections import defaultdict, deque
+from typing import Deque, Dict, Optional
+
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.answer_builder import (
-    build_response,
-    db_find_or_create_user,
-    db_load_history,
-    db_create_ticket,
+    answer_sync, build_response_stream, db, db_create_ticket, db_find_or_create_user,
+    db_load_history, db_migrate_guest, ensure_tables,
 )
+from app.config import ADMIN_TOKEN, CORS_ORIGINS, RATE_LIMIT_PER_MIN
 from app.logger import logger
-from app.retriever import build_index
-from app.config import CHROMA_DB_DIR
+from app.retriever import build_index, index_size
 
-app = FastAPI(title="FineFlow Nova API")
+app = FastAPI(title="FineFlow Nova API", version="3.1")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=CORS_ORIGINS != ["*"],   # credentials + wildcard is invalid per CORS spec
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Request/response models
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Models ───────────────────────────────────────────────────────────────────
 
-class CustomerRequest(BaseModel):    
-    name:       str
-    email:      str
+class CustomerRequest(BaseModel):
+    name: str
+    email: str
     support_id: str = ""
+    session_id: str = ""      # guest session to migrate onto the user (optional)
 
 
 class ChatRequest(BaseModel):
-    message:    str
-    user_id:    int = 0      # 0 or omitted = guest (no DB persistence)
-    session_id: str = ""     # used for guest in-memory sessions
+    message: str
+    session_id: str = ""
+    user_id: int = 0
 
 
 class TicketRequest(BaseModel):
     user_id: int = 0
     subject: str
     message: str
+    email: str = ""
+    session_id: str = ""
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Startup
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Rate limit (per session, sliding minute) ─────────────────────────────────
+
+_RL: Dict[str, Deque[float]] = defaultdict(deque)
+_RL_LOCK = threading.Lock()
+
+
+def _rate_ok(key: str) -> bool:
+    now = time.time()
+    with _RL_LOCK:
+        q = _RL[key]
+        while q and now - q[0] > 60:
+            q.popleft()
+        if len(q) >= RATE_LIMIT_PER_MIN:
+            return False
+        q.append(now)
+        return True
+
+
+# ── Startup / health ─────────────────────────────────────────────────────────
 
 @app.on_event("startup")
-async def startup_event():
-    if not CHROMA_DB_DIR.exists() or not any(CHROMA_DB_DIR.iterdir()):
-        logger.info("ChromaDB index not found — building now...")
+async def _startup():
+    ensure_tables()
+    if index_size() == 0:
+        logger.info("Index empty — building now")
         try:
             build_index()
         except Exception as e:
-            logger.error("Failed to auto-build index: %s", e)
+            logger.error("Auto-build failed: %s", e)
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "db": db.healthy(), "index_chunks": index_size()}
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# POST /customer — find or create user
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Chat ─────────────────────────────────────────────────────────────────────
+
+def _resolve_session(session_id: str, user_id: int) -> str:
+    if user_id > 0:
+        return f"user_{user_id}"
+    return session_id.strip() or str(uuid.uuid4())
+
+
+def _guard(message: str, sid: str):
+    if not message.strip():
+        raise HTTPException(400, "message is required")
+    if len(message) > 2000:
+        raise HTTPException(413, "message too long")
+    if not _rate_ok(sid):
+        raise HTTPException(429, "Too many messages — slow down a little.")
+
+
+@app.post("/ask")
+def ask_post(body: ChatRequest):
+    sid = _resolve_session(body.session_id, body.user_id)
+    _guard(body.message, sid)
+    res = answer_sync(body.message, session_id=sid, user_id=max(body.user_id, 0))
+    return JSONResponse({**res, "session_id": sid})
+
+
+@app.get("/ask")
+def ask_get(q: str = Query(...), session_id: str = Query(""), user_id: int = Query(0)):
+    sid = _resolve_session(session_id, user_id)
+    _guard(q, sid)
+    res = answer_sync(q, session_id=sid, user_id=max(user_id, 0))
+    return JSONResponse({**res, "session_id": sid})
+
+
+@app.post("/ask/stream")
+def ask_stream(body: ChatRequest):
+    sid = _resolve_session(body.session_id, body.user_id)
+    _guard(body.message, sid)
+    uid = max(body.user_id, 0)
+
+    def gen():
+        try:
+            for item in build_response_stream(body.message, sid, uid):
+                if isinstance(item, dict):
+                    yield "data: " + json.dumps({"done": True, "session_id": sid, **item}) + "\n\n"
+                else:
+                    yield "data: " + json.dumps({"delta": item}) + "\n\n"
+        except Exception:
+            logger.exception("stream crashed")
+            yield "data: " + json.dumps({"done": True, "session_id": sid, "error": True,
+                                         "answer": "Something went wrong on my side — please try that again.",
+                                         "request_email": False}) + "\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+# ── Users / history / tickets ────────────────────────────────────────────────
 
 @app.post("/customer")
 def customer(body: CustomerRequest):
-    """
-    Looks up user by email. Creates if not found.
-    Returns user_id to be used in all subsequent /ask, /history, /ticket calls.
-    """
-    name  = body.name.strip()
-    email = body.email.strip().lower()
-    sid   = body.support_id.strip()
-
+    name, email = body.name.strip(), body.email.strip().lower()
     if not name or not email:
-        raise HTTPException(status_code=400, detail="name and email are required")
+        raise HTTPException(400, "name and email are required")
+    uid, existed = db_find_or_create_user(name, email, body.support_id.strip())
+    if uid == 0:
+        return JSONResponse({"user_id": 0, "exists": False,
+                             "warning": "Database unavailable — continuing as guest session"})
+    if body.session_id.strip():
+        db_migrate_guest(body.session_id.strip(), uid)
+    return JSONResponse({"user_id": uid, "exists": existed, "session_id": f"user_{uid}"})
 
-    user_id, existed = db_find_or_create_user(name, email, sid)
-
-    if user_id == 0:
-        # MySQL unavailable — fall back to guest mode gracefully
-        return JSONResponse({
-            "user_id": 0,
-            "exists": False,
-            "warning": "Database unavailable — continuing as guest session",
-        })
-
-    return JSONResponse({"user_id": user_id, "exists": existed})
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# GET /history/{user_id} — load chat history
-# ─────────────────────────────────────────────────────────────────────────────
 
 @app.get("/history/{user_id}")
 def history(user_id: int):
-    """
-    Returns full chat history for a logged-in user, oldest to newest.
-    [{"sender": "user", "message": "..."}, {"sender": "bot", "message": "..."}]
-    """
     if user_id <= 0:
         return JSONResponse([])
-    rows = db_load_history(user_id, limit=200)
-    return JSONResponse(rows)
+    return JSONResponse(db_load_history(user_id=user_id, limit=200))
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# GET /ask — main chat endpoint
-# ─────────────────────────────────────────────────────────────────────────────
-
-@app.get("/ask")
-def chat(
-    q: str = Query(...),
-    session_id: str = Query(""),
-    user_id: int = Query(0)
-):
-    """
-    Frontend compatibility endpoint.
-
-    Accepts:
-    GET /ask?q=hello&session_id=abc123
-
-    Returns:
-    {
-      "answer": "...",
-      "trigger_ticket_popup": false,
-      "session_id": "abc123"
-    }
-    """
-
-    sid = session_id.strip() or str(uuid.uuid4())
-    uid = user_id if user_id > 0 else 0
-
-    if uid:
-        sid = f"user_{uid}"
-
-    result = build_response(
-        q,
-        session_id=sid,
-        user_id=uid
-    )
-
-    return JSONResponse({
-        "answer": result.get("answer", ""),
-        "trigger_ticket_popup": result.get("trigger_ticket_popup", False),
-        "session_id": sid,
-    })
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# POST /ticket — create support ticket
-# ─────────────────────────────────────────────────────────────────────────────
 
 @app.post("/ticket")
 def ticket(body: TicketRequest):
-    """
-    Creates a support ticket. Called by frontend when trigger_ticket_popup
-    was true and the user fills in the support form.
-    """
-    subject = body.subject.strip()
-    message = body.message.strip()
-
-    if not subject or not message:
-        raise HTTPException(status_code=400, detail="subject and message are required")
-
-    ticket_number = db_create_ticket(body.user_id, subject, message)
-
-    if ticket_number == "TKT-ERR":
-        raise HTTPException(status_code=503, detail="Ticket system temporarily unavailable")
-
-    return JSONResponse({"success": True, "ticket_id": ticket_number})
+    if not body.subject.strip() or not body.message.strip():
+        raise HTTPException(400, "subject and message are required")
+    tkt = db_create_ticket(body.user_id, body.subject.strip(), body.message.strip(),
+                           email=body.email.strip(), session_id=body.session_id.strip())
+    if tkt == "TKT-ERR":
+        raise HTTPException(503, "Ticket system temporarily unavailable")
+    return JSONResponse({"success": True, "ticket_id": tkt})
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Admin
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Admin ────────────────────────────────────────────────────────────────────
+
+def _require_admin(token: Optional[str]):
+    if ADMIN_TOKEN and token != ADMIN_TOKEN:
+        raise HTTPException(401, "invalid admin token")
+
 
 @app.post("/admin/build_index")
-def admin_build_index(force: bool = Query(False)):
+def admin_build_index(force: bool = Query(False), x_admin_token: Optional[str] = Header(None)):
+    _require_admin(x_admin_token)
     try:
-        build_index(force_rebuild=force)
-        return {"status": "ok", "msg": "Index built."}
+        return {"status": "ok", "chunks": build_index(force_rebuild=force)}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Static / home
-# ─────────────────────────────────────────────────────────────────────────────
+@app.post("/admin/ingest")
+def admin_ingest(x_admin_token: Optional[str] = Header(None)):
+    _require_admin(x_admin_token)
+    from app.ingest import run as ingest_run
+    written, skipped = ingest_run()
+    return {"status": "ok", "written": written, "skipped": skipped,
+            "chunks": build_index(force_rebuild=True)}
 
-static_dir = os.path.join("app", "static")
-if os.path.isdir(static_dir):
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+# ── Static ───────────────────────────────────────────────────────────────────
+
+_static = os.path.join("app", "static")
+if os.path.isdir(_static):
+    app.mount("/static", StaticFiles(directory=_static), name="static")
 
 
 @app.get("/")
 def home():
-    html = os.path.join("app", "static", "chat.html")
-    if os.path.exists(html):
-        return FileResponse(html)
-    return {"status": "FineFlow Nova API is running"}
+    html = os.path.join(_static, "chat.html")
+    return FileResponse(html) if os.path.exists(html) else {"status": "FineFlow Nova API is running"}

@@ -1,13 +1,16 @@
-FINEFLOW KNOWLEDGE BASE — MASTER REFERENCE v2
-Last updated: June 2026
+FINEFLOW KNOWLEDGE BASE — MASTER REFERENCE v3
+Last updated: August 2026
 ============================================================
 
 
-TOPIC: WHO IS NOVA / CHATBOT IDENTITY
+TOPIC: WHO IS NOVA / CHATBOT IDENTITY / WHAT CAN NOVA HELP WITH
 ============================================================
-Nova is Fine Flow's AI assistant. Nova only answers questions about Fine Flow.
+Nova is Fine Flow's AI assistant. Nova answers questions about Fine Flow and about UK fleet fines in general (PCNs, councils, TfL, DVLA, appeals).
 Nova is warm, direct, and helpful — like a knowledgeable colleague.
-Nova does not answer questions about coding, cooking, weather, other AI tools, or anything unrelated to Fine Flow.
+Nova does not answer questions about coding, cooking, weather, other AI tools, or anything unrelated to Fine Flow or fleet fines.
+Things Nova can help with: how Fine Flow works, pricing and plans, appeals and disputes, connecting Gmail, app passwords, driver management, billing, reports, security, referrals, what to prioritise, and passing a query to the Fine Flow team.
+Nova cannot see a customer's live account data (fine counts, invoices, appeal status). For that, the customer uses their Fine Flow dashboard.
+If a user says "help me", "I'm bored" or something vague, Nova offers a few concrete things it can help with — for example pricing, how fines are captured from Gmail, or how appeals work.
 
 
 TOPIC: WHAT IS FINEFLOW / OVERVIEW / CORE DESCRIPTION
@@ -85,6 +88,14 @@ Fine Flow does NOT log into council or authority websites on your behalf. Paymen
 When asked specifically "can Fine Flow pay fines on my behalf" — give a direct short answer (no, and why) without listing unrelated features. Keep it focused on the payment question only.
 
 
+TOPIC: HOW DO I PAY A FINE / PAYING A FINE / WHERE TO PAY
+============================================================
+You pay the fine directly to the issuing authority (the council, TfL, police or private operator named on the notice) using the payment link or instructions on the penalty notice itself. Fine Flow never takes the payment.
+Inside Fine Flow, open the fine from the dashboard — the extracted details (reference number, amount, due date, issuing authority) are all there so you can pay quickly on the authority's site. Once paid, mark the fine as PAID in Fine Flow so the record and reports stay accurate.
+Pay before the due date — most UK PCNs offer a discount if paid within 14 days and the amount increases once the deadline passes.
+If the fine is being disputed or appealed, wait for the outcome before paying, but keep an eye on the deadline shown in Fine Flow.
+
+
 TOPIC: DRIVER MATCHING / HOW DRIVERS ARE ASSIGNED
 ============================================================
 Fine Flow uses your driver data to work out responsibility automatically.
@@ -131,12 +142,21 @@ Success depends on the historical outcomes captured for similar cases, but there
 
 Avoid AI-sounding phrases like "learns from them to improve success rates" — instead say something like: "Fine Flow can show a guidance figure based on similar past outcomes, but every council reviews appeals differently, so there's no guaranteed result."
 
+If a user wants to appeal a specific fine, useful details to ask for: which authority issued it (e.g. a London borough council, TfL), the violation type, and the payment deadline. Nova can then explain the process and what evidence helps. Nova cannot submit the appeal itself — that happens through the driver and admin dashboards.
+
 
 TOPIC: APPEAL STATUS TRACKING
 ============================================================
 Every appeal has a tracked status visible on the Fine Flow dashboard.
 Status moves: DISPUTED → (admin decision) → UNDER REVIEW (if accepted, appeal letter sent) or back to CONFIRMED (if rejected).
 From UNDER REVIEW, the outcome is tracked through to a final resolution once the authority responds.
+
+
+TOPIC: HOW LONG DOES AN APPEAL TAKE / APPEAL TIMELINES
+============================================================
+Inside Fine Flow, the steps are fast: a driver can dispute in minutes, and once the admin accepts, the appeal letter is generated and emailed to the authority straight away.
+The waiting part is the authority. Each UK council and issuing body has its own review process and timescales — commonly anywhere from a couple of weeks to several weeks — and Fine Flow has no control over that.
+While the appeal is with the authority, Fine Flow keeps tracking the fine's deadline and will still flag it OVERDUE if the due date passes, so the fleet manager is never caught out.
 
 
 TOPIC: DOES FINEFLOW SUPPORT ALL COUNCILS
@@ -147,22 +167,38 @@ However, each council has its own internal process for reviewing appeals, so out
 
 TOPIC: PRICING / PLANS / COST / SUBSCRIPTION OPTIONS
 ============================================================
-Fine Flow uses a simple pricing model based on your fleet size. There are four subscription plans plus a pay-as-you-go option.
+Fine Flow uses a simple pricing model based on your fleet size. There are three subscription plans plus a pay-as-you-go option.
 
-Essential — £99/month (5–50 vehicles)
+Essential — £99/month (up to 50 vehicles)
 Core — £199/month (51–100 vehicles)
-Advanced — £399/month (101–200 vehicles)
-Elite — £499/month (200+ vehicles)
+Elite — £499/month (more than 100 vehicles — unlimited)
 
 Each plan includes a monthly fine allowance, with fines charged at £0.75 each within that limit.
 If you exceed your allowance, additional fines are charged at £2.50 per fine.
 
 Pay-as-you-go (PAYG): no subscription, no monthly fee, £2.75 per fine. Zero lock-in. Suited to fleets with low or unpredictable fine volumes.
 
-Every plan includes identical features — no locked features, no paywalls.
-There is NO £2.00 fee anywhere in Fine Flow.
+Every plan includes identical features — no locked features, no paywalls. Plans differ ONLY by vehicle capacity.
+There is NO Advanced plan, NO £399 plan and NO £2.00 fee anywhere in Fine Flow.
+NEVER say a higher plan has "more features", "extra features" or "higher allowances".
 
-When listing plans, ALWAYS include all four subscription tiers (Essential, Core, Advanced, Elite) AND mention PAYG as an alternative. Do not omit Advanced or PAYG.
+When listing plans, ALWAYS include all three subscription tiers (Essential, Core, Elite) AND mention PAYG as an alternative. Do not omit PAYG.
+
+
+TOPIC: WHICH PLAN IS RIGHT FOR ME / PLAN BY FLEET SIZE / PLAN RECOMMENDATION
+============================================================
+The plan is decided by fleet size only. Fine volume does not change which plan you're on — more fines simply means more £0.75 per-fine processing charges (or £2.50 each beyond the allowance).
+
+Up to 50 vehicles → Essential, £99/month
+51 to 100 vehicles → Core, £199/month
+More than 100 vehicles → Elite, £499/month (unlimited vehicles)
+Low or unpredictable fine volume, or no wish to commit → Pay-as-you-go, £2.75 per fine, no monthly fee
+
+Worked example: 5 vehicles and 33 fines a month → Essential at £99/month, with 33 fines at £0.75 each (£24.75) within the allowance.
+Worked example: 150 vehicles → Elite at £499/month.
+Worked example: 80 vehicles → Core at £199/month.
+All plans have exactly the same features. A higher plan does not unlock extra features — it only covers more vehicles.
+To recommend a plan, Nova needs the number of vehicles. Monthly fine volume is useful for estimating per-fine costs.
 
 
 TOPIC: WHAT THE £0.75 FEE COVERS / BILLING TRIGGER
@@ -256,15 +292,67 @@ They improve automation and make matching more accurate, but if they're missing 
 Without logs it means more manual assignment work, but the system remains useful with imperfect data.
 
 
-TOPIC: GMAIL CONNECTION / EMAIL SETUP / HOW TO MOUNT GMAIL
+TOPIC: GMAIL CONNECTION / EMAIL SETUP / HOW TO MOUNT GMAIL / IS GMAIL REQUIRED
 ============================================================
-Fine Flow connects to your Gmail inbox and monitors it every minute for incoming fine notifications.
+Fine Flow connects to your Gmail inbox and monitors it every minute for incoming fine notifications. This is how fines are captured automatically.
+
+Is connecting Gmail required? No. It's the recommended way to get automatic capture, but an admin can instead upload fines manually (individually or in bulk) and Fine Flow will extract the details from the uploaded documents. Most fleets connect Gmail so nothing has to be done by hand.
 
 Two connection methods:
 1. Gmail OAuth 2.0 (recommended) — connect via Google login, no password stored, tokens encrypted with AES-256-CBC and auto-refreshed before expiry.
 2. App Password IMAP (fallback) — generate a 16-character app password in your Google account settings and enter it into Fine Flow; this is encrypted before storage.
 
-Setup is done through the Fine Flow dashboard settings — connect Gmail there and follow the prompts. An admin can also manually upload fines if preferred over connecting an inbox.
+Setup is done through the Fine Flow dashboard: go to Settings, choose Email Connection, then either click Connect with Google (OAuth) or enter your Gmail address and app password (IMAP). Once connected, Fine Flow starts checking the inbox every minute.
+
+Fine Flow currently connects to Gmail inboxes (including Google Workspace accounts). Fines sent to another mailbox can be forwarded to the connected Gmail address or uploaded manually.
+
+
+TOPIC: APP PASSWORD / WHAT IS AN APP PASSWORD / HOW TO GENERATE A GMAIL APP PASSWORD
+============================================================
+An app password is a 16-character code that Google generates so a third-party app (like Fine Flow) can read your Gmail over IMAP without using your main Google password. It is Google's own feature, not something Fine Flow invents.
+Fine Flow uses it as the fallback connection method when Gmail OAuth isn't used. Fine Flow encrypts the app password (AES-256-CBC) before storing it and never stores your main Google password.
+
+How to create one:
+1. Google requires 2-Step Verification to be switched on for the account first (Google Account → Security → 2-Step Verification).
+2. Go to Google Account → Security → 2-Step Verification → App passwords (or search "App passwords" in your Google Account settings).
+3. Create a new app password — name it something like "Fine Flow".
+4. Google shows a 16-character code. Copy it without the spaces.
+5. In Fine Flow: Settings → Email Connection → enter your Gmail address and paste the app password → Save.
+
+If you'd rather not use an app password, use Connect with Google (OAuth 2.0) instead — it's the recommended method and needs no password at all.
+
+
+TOPIC: GMAIL CONNECTION PROBLEMS / CANNOT CONNECT GMAIL / TROUBLESHOOTING EMAIL SETUP
+============================================================
+Common reasons a Gmail connection fails, and what to check:
+
+Using an app password (IMAP):
+- 2-Step Verification is not enabled on the Google account — Google won't offer app passwords without it.
+- The 16-character code was pasted with spaces, or a character is missing. Generate a fresh one and paste it without spaces.
+- IMAP is disabled in Gmail: in Gmail go to Settings → See all settings → Forwarding and POP/IMAP → Enable IMAP.
+- The account is a Google Workspace account and the Workspace admin has blocked IMAP or "less secure app" style access — the admin needs to allow it.
+- The app password was revoked (changing the Google password revokes all app passwords). Create a new one.
+
+Using Connect with Google (OAuth):
+- The Google consent screen was closed or a permission was declined — reconnect and allow the requested access.
+- Signed in to the wrong Google account in the browser — sign out, then reconnect with the mailbox that receives the fines.
+- Workspace admin restrictions on third-party apps — the admin may need to approve Fine Flow.
+
+After connecting, allow a minute or two — Fine Flow checks the inbox every minute, so a test fine email should appear shortly.
+
+If the connection still fails after these checks, Nova should pass the issue to the Fine Flow team: ask for the user's email address (if not already known) and log it so the team can follow up directly. In the meantime, fines can be uploaded manually from the dashboard so nothing is missed.
+
+
+TOPIC: CONTACT ADMIN / PASS MY QUERY TO THE TEAM / TALK TO A HUMAN / ESCALATION
+============================================================
+Nova can pass a query to the Fine Flow team. To do that Nova needs the user's email address so the team can reply.
+When a user asks to contact the admin, speak to someone, pass on a query, or asks something Nova can't answer from this knowledge base:
+1. Nova asks for the user's email address (once — if it's already known, don't ask again).
+2. Nova logs the query with the email. The user gets a ticket reference.
+3. The Fine Flow team follows up by email.
+Nova only says a query has been passed on after it has actually been logged.
+
+For anyone who prefers to get in touch directly: phone +47 32 28 50 00 or email ff.sales@fineflow.com.
 
 
 TOPIC: UK FINE TYPES / WHAT FINES DOES IT HANDLE
@@ -321,6 +409,7 @@ TOPIC: SIGN UP / GET STARTED / HOW TO BUY
 ============================================================
 To get started with Fine Flow, contact the sales team on +47 32 28 50 00 or email ff.sales@fineflow.com.
 They'll walk you through choosing the right plan, setting up your account and connecting your Gmail inbox.
+Nova can also log the user's details (name, email, fleet size) and pass them to the team so sales gets in touch.
 
 
 TOPIC: REPORTS / EXPORTS

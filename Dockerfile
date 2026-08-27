@@ -1,34 +1,11 @@
 FROM python:3.10-slim
-
 WORKDIR /app
-
-# System deps (important for chromadb + numpy)
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy requirements first (cache optimization) 
+RUN apt-get update && apt-get install -y build-essential curl && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
-
-RUN pip install --no-cache-dir --upgrade pip
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install pymysql --break-system-packages
-
-# Copy project
+RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r requirements.txt
 COPY . .
-
-# Env
-ENV PYTHONPATH=/app
-ENV PYTHONUNBUFFERED=1
-
-# Create required dirs
-RUN mkdir -p /app/data/chroma_db
-RUN mkdir -p /app/data/docs_txt
-RUN mkdir -p /app/data/raw
-
-# Expose port
+ENV PYTHONPATH=/app PYTHONUNBUFFERED=1
+RUN mkdir -p /app/data/chroma_db /app/data/docs_txt /app/data/raw
 EXPOSE 8000
-
-# Run API
-CMD ["uvicorn", "app.api:app", "--host", "0.0.0.0", "--port", "8000"]
+# State lives in MySQL → multiple workers are safe. Chroma is read-only at runtime.
+CMD ["uvicorn", "app.api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

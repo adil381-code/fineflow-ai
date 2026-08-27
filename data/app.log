@@ -922,3 +922,20 @@ requests.exceptions.ConnectionError: HTTPSConnectionPool(host='api.openai.com', 
 2026-08-27 11:40:57,526 INFO MySQL connected
 2026-08-27 11:50:50,841 WARNING db_load_history: [WinError 10038] An operation was attempted on something that is not a socket
 2026-08-27 11:50:52,279 INFO MySQL connected
+2026-08-27 14:53:24,733 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=0
+2026-08-27 14:53:26,176 INFO fineflow_nova: MySQL connected
+2026-08-27 14:53:31,257 INFO fineflow_nova: Index empty — building now
+2026-08-27 14:53:35,560 INFO fineflow_nova: Indexed 37/37
+2026-08-27 14:53:35,560 INFO fineflow_nova: Index built: 37 chunks from 1 files
+2026-08-27 14:53:56,908 INFO fineflow_nova: session=s_yxiwz8hl q='hi' → search='How can I contact the Fine Flow support team for assistance with my queries?'
+2026-08-27 14:54:12,683 INFO fineflow_nova: session=s_yxiwz8hl q='how are you ,' → search='How can I find information on how to contact the Fine Flow support team for assi'
+2026-08-27 14:54:45,919 INFO fineflow_nova: session=s_5m88c2t7 q='hi' → search='hi'
+2026-08-27 14:54:55,357 INFO fineflow_nova: session=s_5m88c2t7 q='how are you' → search='How can I find information about the features and functionalities of Fine Flow U'
+2026-08-27 14:55:10,097 INFO fineflow_nova: session=s_5m88c2t7 q='appeals' → search='What information is available about how appeals work in Fine Flow for UK fleet f'
+2026-08-27 14:55:39,796 INFO fineflow_nova: session=s_5m88c2t7 q='yesh , how much time it will take to make an appeals' → search='How much time does it take to process appeals in Fine Flow for UK fleet fines?'
+2026-08-27 14:55:56,247 INFO fineflow_nova: session=s_5m88c2t7 q='london' → search='What is the process for managing appeals for fleet fines in London using Fine Fl'
+2026-08-27 14:56:15,610 INFO fineflow_nova: session=s_5m88c2t7 q='i want to track it' → search='How can I track the status of an appeal in Fine Flow for fines issued by a Londo'
+2026-08-27 14:57:02,264 INFO fineflow_nova: session=s_5m88c2t7 q='how will fineflow help me to make an appeal' → search='How will Fine Flow assist me in making an appeal for a fine?'
+2026-08-27 14:57:21,471 INFO fineflow_nova: session=s_5m88c2t7 q='ok thank ypou' → search='How can I express my gratitude to the Fine Flow support team for their assistanc'
+2026-08-27 14:57:42,177 INFO fineflow_nova: session=s_5m88c2t7 q='yes make me intouch' → search='How can I get in touch with the Fine Flow team for assistance with my appeal or '
+2026-08-27 14:58:00,316 INFO fineflow_nova: session=s_5m88c2t7 q='acil@gmail.com' → search='How does Fine Flow assist users in making an appeal for fines, and what features'

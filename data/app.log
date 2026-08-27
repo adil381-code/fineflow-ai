@@ -511,3 +511,339 @@ json.decoder.JSONDecodeError: Invalid control character at: line 20 column 436 (
 2026-08-25 17:25:57,831 INFO MySQL connected
 2026-08-25 17:42:12,546 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
 2026-08-25 17:42:14,127 INFO MySQL connected
+2026-08-25 19:40:28,594 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' ([Errno 11001] getaddrinfo failed)")
+2026-08-25 19:40:28,829 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' ([Errno 11001] getaddrinfo failed)")
+2026-08-25 19:40:28,943 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' ([Errno 11001] getaddrinfo failed)")
+2026-08-25 19:40:28,946 ERROR OpenAI embedding API call failed: HTTPSConnectionPool(host='api.openai.com', port=443): Max retries exceeded with url: /v1/embeddings (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001EE193FD120>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)"))
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\util\connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 753, in connect
+    self.sock = sock = self._new_conn()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 205, in _new_conn
+    raise NameResolutionError(self.host, self, e) from e
+urllib3.exceptions.NameResolutionError: <urllib3.connection.HTTPSConnection object at 0x000001EE193FD120>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\adapters.py", line 644, in send
+    resp = conn.urlopen(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\util\retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api.openai.com', port=443): Max retries exceeded with url: /v1/embeddings (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001EE193FD120>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)"))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\retriever.py", line 52, in get_openai_embedding
+    response = requests.post(OPENAI_EMBED_API_URL, headers=headers, json=payload, timeout=60)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\api.py", line 115, in post
+    return request("post", url, data=data, json=json, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\adapters.py", line 677, in send
+    raise ConnectionError(e, request=request)
+requests.exceptions.ConnectionError: HTTPSConnectionPool(host='api.openai.com', port=443): Max retries exceeded with url: /v1/embeddings (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001EE193FD120>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)"))
+2026-08-25 19:40:28,973 ERROR OpenAI embedding API call failed: HTTPSConnectionPool(host='api.openai.com', port=443): Max retries exceeded with url: /v1/embeddings (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001EE7FC49ED0>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)"))
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\util\connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 753, in connect
+    self.sock = sock = self._new_conn()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 205, in _new_conn
+    raise NameResolutionError(self.host, self, e) from e
+urllib3.exceptions.NameResolutionError: <urllib3.connection.HTTPSConnection object at 0x000001EE7FC49ED0>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\adapters.py", line 644, in send
+    resp = conn.urlopen(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\util\retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api.openai.com', port=443): Max retries exceeded with url: /v1/embeddings (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001EE7FC49ED0>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)"))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\retriever.py", line 52, in get_openai_embedding
+    response = requests.post(OPENAI_EMBED_API_URL, headers=headers, json=payload, timeout=60)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\api.py", line 115, in post
+    return request("post", url, data=data, json=json, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\adapters.py", line 677, in send
+    raise ConnectionError(e, request=request)
+requests.exceptions.ConnectionError: HTTPSConnectionPool(host='api.openai.com', port=443): Max retries exceeded with url: /v1/embeddings (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001EE7FC49ED0>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)"))
+2026-08-25 19:40:29,268 ERROR Failed to embed query: HTTPSConnectionPool(host='api.openai.com', port=443): Max retries exceeded with url: /v1/embeddings (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001EE193FD120>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)"))
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\util\connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 753, in connect
+    self.sock = sock = self._new_conn()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 205, in _new_conn
+    raise NameResolutionError(self.host, self, e) from e
+urllib3.exceptions.NameResolutionError: <urllib3.connection.HTTPSConnection object at 0x000001EE193FD120>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\adapters.py", line 644, in send
+    resp = conn.urlopen(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\util\retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api.openai.com', port=443): Max retries exceeded with url: /v1/embeddings (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001EE193FD120>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)"))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\retriever.py", line 205, in search
+    query_embedding = get_openai_embedding([query])[0]
+  File "D:\fineflow-rag-clean\app\retriever.py", line 52, in get_openai_embedding
+    response = requests.post(OPENAI_EMBED_API_URL, headers=headers, json=payload, timeout=60)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\api.py", line 115, in post
+    return request("post", url, data=data, json=json, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\adapters.py", line 677, in send
+    raise ConnectionError(e, request=request)
+requests.exceptions.ConnectionError: HTTPSConnectionPool(host='api.openai.com', port=443): Max retries exceeded with url: /v1/embeddings (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001EE193FD120>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)"))
+2026-08-25 19:40:29,272 ERROR Failed to embed query: HTTPSConnectionPool(host='api.openai.com', port=443): Max retries exceeded with url: /v1/embeddings (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001EE7FC49ED0>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)"))
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\util\connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 753, in connect
+    self.sock = sock = self._new_conn()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 205, in _new_conn
+    raise NameResolutionError(self.host, self, e) from e
+urllib3.exceptions.NameResolutionError: <urllib3.connection.HTTPSConnection object at 0x000001EE7FC49ED0>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\adapters.py", line 644, in send
+    resp = conn.urlopen(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\util\retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api.openai.com', port=443): Max retries exceeded with url: /v1/embeddings (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001EE7FC49ED0>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)"))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\retriever.py", line 205, in search
+    query_embedding = get_openai_embedding([query])[0]
+  File "D:\fineflow-rag-clean\app\retriever.py", line 52, in get_openai_embedding
+    response = requests.post(OPENAI_EMBED_API_URL, headers=headers, json=payload, timeout=60)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\api.py", line 115, in post
+    return request("post", url, data=data, json=json, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\adapters.py", line 677, in send
+    raise ConnectionError(e, request=request)
+requests.exceptions.ConnectionError: HTTPSConnectionPool(host='api.openai.com', port=443): Max retries exceeded with url: /v1/embeddings (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001EE7FC49ED0>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)"))
+2026-08-25 19:40:29,303 ERROR OpenAI failed
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\util\connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 753, in connect
+    self.sock = sock = self._new_conn()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 205, in _new_conn
+    raise NameResolutionError(self.host, self, e) from e
+urllib3.exceptions.NameResolutionError: <urllib3.connection.HTTPSConnection object at 0x000001EE19380A60>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\adapters.py", line 644, in send
+    resp = conn.urlopen(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\util\retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api.openai.com', port=443): Max retries exceeded with url: /v1/chat/completions (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001EE19380A60>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)"))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\answer_builder.py", line 654, in _ai
+    Essential up to 50 vehicles | Core up to 100 | Elite unlimited.
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\api.py", line 115, in post
+    return request("post", url, data=data, json=json, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\adapters.py", line 677, in send
+    raise ConnectionError(e, request=request)
+requests.exceptions.ConnectionError: HTTPSConnectionPool(host='api.openai.com', port=443): Max retries exceeded with url: /v1/chat/completions (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001EE19380A60>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)"))
+2026-08-25 19:40:29,329 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' ([Errno 11001] getaddrinfo failed)")
+2026-08-25 19:40:29,373 ERROR OpenAI failed
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\util\connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\socket.py", line 955, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 753, in connect
+    self.sock = sock = self._new_conn()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connection.py", line 205, in _new_conn
+    raise NameResolutionError(self.host, self, e) from e
+urllib3.exceptions.NameResolutionError: <urllib3.connection.HTTPSConnection object at 0x000001EE193FED10>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\adapters.py", line 644, in send
+    resp = conn.urlopen(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\urllib3\util\retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api.openai.com', port=443): Max retries exceeded with url: /v1/chat/completions (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001EE193FED10>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)"))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\answer_builder.py", line 654, in _ai
+    Essential up to 50 vehicles | Core up to 100 | Elite unlimited.
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\api.py", line 115, in post
+    return request("post", url, data=data, json=json, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\adapters.py", line 677, in send
+    raise ConnectionError(e, request=request)
+requests.exceptions.ConnectionError: HTTPSConnectionPool(host='api.openai.com', port=443): Max retries exceeded with url: /v1/chat/completions (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001EE193FED10>: Failed to resolve 'api.openai.com' ([Errno 11001] getaddrinfo failed)"))
+2026-08-25 19:40:29,383 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' ([Errno 11001] getaddrinfo failed)")
+2026-08-25 19:40:29,424 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' ([Errno 11001] getaddrinfo failed)")
+2026-08-27 09:21:28,197 INFO Retriever starting. OPENAI_EMBED_MODEL=text-embedding-3-small, using ChromaDB
+2026-08-27 09:21:33,687 WARNING MySQL unavailable: (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")

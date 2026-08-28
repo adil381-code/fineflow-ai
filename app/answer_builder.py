@@ -11,6 +11,41 @@ FineFlow Nova — LLM-first conversation engine (streaming, tools, SQL memory)
 • Follow-up cadence guaranteed: if the previous reply had no question, this one must end with one.
 • Memory is SQL only: chat_history (turns) + session_state (profile/summary). Chroma holds the KB only.
 • Streaming: build_response_stream() yields text chunks then a final dict; build_response() wraps it.
+
+v3.5 changes:
+  10. _hard_guard(): final deterministic output gate. If, even after corrective
+      regeneration, the answer still contains the Advanced plan / £399 / £2.00 or a
+      £-savings claim, the offending content is rewritten in code — the locked plan
+      list replaces bad pricing, the 80% phrase replaces invented savings. These two
+      failure classes can no longer reach the user under any model behaviour.
+
+v3.4 changes:
+  7. LOCKED PRICING moved into the system prompt (client-confirmed, overrides the KB).
+     If KB excerpts mention an Advanced plan / £399 / £2.00 they are declared outdated
+     and must be ignored. This makes pricing correct even against a stale KB.
+  8. £ savings claims banned entirely — the only savings claim allowed is the
+     "up to 80% admin time" phrase. Verifier now blocks "save ... £N" patterns,
+     the Advanced plan and £399 in answers (regeneration, not just a log line).
+  9. Rule 6: a bare number ("8", "40ish") answers the most recent question Nova
+     asked — never reassigned to a different field.
+
+v3.3 changes:
+  5. Rule 7/8 extended: "no" to a Nova question means drop that thread and pivot;
+     an unanswered question is never re-asked verbatim — rephrase once, then pivot.
+  6. Deterministic answer verifier (_verify_answer): catches (a) a reply that repeats
+     the previous reply, (b) a follow-up question already asked this session, and
+     (c) any £ amount not present in the KB excerpts or customer context (invented
+     savings/prices). One corrective regeneration is performed; violations are logged.
+
+v3.2 changes (see chat log):
+  1. _clean() now strips hollow-filler sentences ("just let me know", "feel free to ask",
+     "I'm here to help with anything...") that the model still leaks despite rule 17.
+  2. SALES FLOW rule added to _SYSTEM: pricing questions must end by asking fleet size
+     when it isn't known, and must lead with the matching plan when it is.
+  3. Rule 10 strengthened: reciting the phone number instead of calling escalate_to_team
+     is named as a failure.
+  4. Locked-fact tripwire: if a reply mentions the removed "Advanced" plan, £399 or £2.00,
+     an ERROR is logged — that means the deployed KB is stale and must be fixed + re-embedded.
 """
 
 from __future__ import annotations
@@ -425,9 +460,9 @@ ABSOLUTE RULES
 
 5. LOCKED MEMORY — CUSTOMER CONTEXT shows confirmed facts. NEVER change them. NEVER ask for something already confirmed. If asked "what did I tell you?" — state the confirmed values exactly. Reference them naturally (e.g. "With your 5 vehicles...").
 
-6. CONTINUITY — read the conversation before replying. When the user answers a question you asked, treat their reply as that answer even if it's one word ("yes", "london", "5", "gmail"). Never restart the conversation or fall back to a generic menu mid-thread.
+6. CONTINUITY — read the conversation before replying. When the user answers a question you asked, treat their reply as that answer even if it's one word ("yes", "london", "5", "gmail"). A bare number ("8", "40ish", "around 60") is ALWAYS the answer to the most recent unanswered question YOU asked — if you asked fleet size two messages ago and they now send "8", that's 8 vehicles, even if other topics came in between. Save it with save_customer_details against the right field, and never reassign it to a different field later. Never restart the conversation or fall back to a generic menu mid-thread.
 
-7. COUNTER QUESTIONS — when the user says "no", "what?" or something vague — do NOT reset. Acknowledge briefly and ask a DIFFERENT relevant follow-up. Keep the conversation alive.
+7. COUNTER QUESTIONS — when the user says "no", "what?" or something vague — do NOT reset. Acknowledge briefly and ask a DIFFERENT relevant follow-up. Keep the conversation alive. "No" in reply to a question you asked means they're declining that thread — DROP it completely and pivot to a different useful topic; re-asking the same question after a "no" is a failure. If they say "yes"/"ok" without actually giving the detail you asked for, do not re-ask the identical question: either ask for the specific missing piece in clearly different words with an example ("Which council was it — Lambeth, TfL...?"), or move on to something else you can help with. The same question NEVER appears twice in a conversation, word for word or reworded.
 
 8. PROGRESSION — when the user's message is just an acknowledgement ("yes", "sure", "yeah", "ok", "okay", "sounds good") and not a new question:
 - Do NOT repeat what you just said. Check "Your exact previous reply" in CUSTOMER CONTEXT — if your new reply would restate the same facts, plan, price or pitch, even in different words, stop and rewrite it.
@@ -446,7 +481,7 @@ Pick the one that fits and hasn't been asked: fleet size before recommending a p
 - the user asks to contact the admin, sales or support team, or how to reach them
 - the user reports a problem, issue, error, or that something isn't working (e.g. "I'm having trouble", "it's not connecting", "I have a problem with...")
 - the user asks something about Fine Flow you can't answer from the knowledge base
-Do NOT just recite the phone number or email and stop there — that leaves them unhelped with no ticket raised. Call the tool. If it says no email is on file, ask for their email in one short, natural sentence ("What's the best email for the team to reach you on?"), then call escalate_to_team again once they give it. NEVER say a query has been passed on, or that "the team will assist you", unless the tool actually confirmed it with a ticket number.
+Do NOT just recite the phone number or email and stop there — that leaves them unhelped with no ticket raised. Reciting the contact details INSTEAD of calling escalate_to_team is a failure, every time — the tool is how the team actually finds out. Call the tool. If it says no email is on file, ask for their email in one short, natural sentence ("What's the best email for the team to reach you on?"), then call escalate_to_team again once they give it. NEVER say a query has been passed on, or that "the team will assist you", unless the tool actually confirmed it with a ticket number.
 
 11. SMALL TALK — "hi", "help me", "I'm bored", "nothing": one friendly human line, then offer two or three concrete things you can help with (pricing, how fines are captured from Gmail, appeals). Don't sound like a menu.
 
@@ -454,7 +489,17 @@ Do NOT just recite the phone number or email and stop there — that leaves them
 
 13. CARD DETAILS — never stored. Say this first when asked.
 
-14. PRICING — plans and figures come ONLY from the KNOWLEDGE BASE EXCERPTS for this turn, using the KB's own plan names, prices and capacities word for word. Do not rely on a fixed list of plans hardcoded in your own head — the plan lineup can change and the KB is always the source of truth. Never invent a plan, price, fee or capacity that isn't in the excerpts. When listing plans, list every plan the KB excerpts return, plus pay-as-you-go if the excerpts mention it. Don't claim a higher plan has "more features" unless the KB excerpts say so.
+14. PRICING — LOCKED, client-confirmed. These figures override everything, including the knowledge base:
+Essential £99/month (up to 50 vehicles) | Core £199/month (51-100) | Elite £499/month (100+, unlimited).
+Per fine within allowance £0.75 | overage £2.50 | Pay-as-you-go £2.75 per fine, no subscription.
+There are exactly THREE plans plus pay-as-you-go. There is NO Advanced plan, NO £399 price, NO £2.00 fee — if a knowledge base excerpt mentions any of these, that excerpt is outdated and must be ignored; if the user asks whether an Advanced plan exists, say no and give the three real plans. All plans have identical features; fleet size alone decides the plan. Never invent a plan, price, fee or capacity beyond this list.
+
+14a. SAVINGS CLAIMS — never state a £ amount that Fine Flow saves, not even if a knowledge base excerpt suggests one. The ONLY savings claim permitted is "cut admin time by up to 80%". Money saved depends on their fines and process — you don't know it, so don't invent it.
+
+14b. SALES FLOW — pricing is a conversation, not a price list. When the user asks about pricing, plans, cost or "which plan":
+- If fleet size is NOT in CUSTOMER CONTEXT: answer from the KB, then END the reply by asking how many vehicles are in their fleet. This question is mandatory here even if a follow-up wouldn't otherwise be needed.
+- If fleet size IS in CUSTOMER CONTEXT: lead with the one plan that fits their fleet size, by name and price, before anything else. Don't re-list all plans unless they ask for the full lineup.
+- Once fleet size and monthly fines are both known and they're deciding, recommend the fitting plan once and offer to put them in touch with the sales team once — never re-pitch after that.
 
 15. APPEALS — CORRECT FLOW:
 Driver disputes → DISPUTED (driver action)
@@ -610,14 +655,125 @@ def _clean_chunk(t: str) -> str:
     return t.replace("**", "").replace("`", "")
 
 
+# v3.2: hollow-filler sentences the model still leaks despite rule 17.
+# A sentence is dropped when it matches one of these AND carries no real content
+# (no question mark, no digits, no specific instruction words).
+_HOLLOW_PAT = re.compile(
+    r"(just\s+let\s+me\s+know|let\s+me\s+know\b|feel\s+free\s+to\s+ask|"
+    r"don'?t\s+hesitate|happy\s+to\s+help|here\s+to\s+help\s+with\s+anything|"
+    r"any\s+other\s+questions|if\s+you\s+need\s+(any\s+)?(more\s+|further\s+)?"
+    r"(help|details|information|assistance))", re.I)
+_SUBSTANCE_PAT = re.compile(r"[\d£?]|which|what|when|where|how\s+many|go\s+to|click|settings", re.I)
+
+
+def _strip_hollow(text: str) -> str:
+    """Remove filler sentences ('If you need more help, just let me know!')."""
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    kept = []
+    for s in sentences:
+        if _HOLLOW_PAT.search(s) and not _SUBSTANCE_PAT.search(s):
+            continue
+        kept.append(s)
+    out = " ".join(kept).strip()
+    return out if out else text  # never return empty because everything was filler
+
+
 def _clean(text: str) -> str:
     text = (text or "").strip()
     text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
     text = re.sub(r"(?m)^\s*#{1,6}\s*", "", text)
     text = re.sub(r"(?m)^\s*[-*•]\s+", "", text)
     text = text.replace("`", "")
+    text = _strip_hollow(text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+
+
+# v3.2: locked-fact tripwire. These figures were removed from the KB by client
+# decision (§3 of the handoff report). If they appear in an answer, the deployed
+# KB is stale — fix the KB file and re-embed (rm -rf data/chroma_db + restart).
+_LOCKED_VIOLATION = re.compile(r"£399|£2\.00\b|\bAdvanced\b[^.]{0,40}(plan|£)", re.I)
+
+
+_MONEY_RE = re.compile(r"£\s?([\d,]+(?:\.\d+)?)")
+
+
+def _norm_cmp(t: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^\w\s?]", "", (t or "").lower())).strip()
+
+
+def _find_violations(answer: str, st: "State", kb_ctx: str) -> List[str]:
+    """Deterministic checks the model keeps failing despite prompt rules."""
+    v: List[str] = []
+    # (a) whole-reply repeat of the previous reply
+    if st.last_answer and _norm_cmp(answer) == _norm_cmp(st.last_answer):
+        v.append("Your reply is identical to your previous reply. Say something different: "
+                 "acknowledge their last message and either rephrase your question with a concrete "
+                 "example or pivot to a different useful topic.")
+    # (b) re-asked question
+    q = _extract_question(answer)
+    if q:
+        qn = _norm_cmp(q)
+        for prev in st.asked_questions:
+            if _norm_cmp(prev) == qn:
+                v.append(f"You already asked this exact question earlier: \"{prev}\". "
+                         "Never repeat a question. Either ask for the missing detail in clearly "
+                         "different words with an example, or drop the thread and pivot.")
+                break
+    # (c0) locked-pricing violations — these regenerate even when the stale KB "grounds" them
+    if re.search(r"£399|£2\.00\b", answer) or re.search(r"\bAdvanced\b[^.]{0,50}(plan|£|\d)", answer, re.I):
+        v.append("You mentioned the Advanced plan / £399 / £2.00. These do NOT exist — the KB excerpt "
+                 "containing them is outdated (rule 14). There are exactly three plans: Essential £99, "
+                 "Core £199, Elite £499, plus pay-as-you-go £2.75. Rewrite using only these.")
+    # (c1) £ savings claims — banned outright (rule 14a)
+    if re.search(r"\bsav(e|es|ed|ing)\b[^.£]{0,60}£\s?[\d,]+", answer, re.I):
+        v.append("You stated a £ savings amount. Never do this (rule 14a) — the only savings claim "
+                 "allowed is 'cut admin time by up to 80%'. Remove the £ figure.")
+    # (c) invented £ amounts (savings/prices not grounded in KB or customer context)
+    allowed = set(m.replace(",", "") for m in _MONEY_RE.findall(
+        (kb_ctx or "") + " " + st.context_block() + " 99 199 499 0.75 2.50 2.75"))
+    allowed.discard("399"); allowed.discard("2.00")  # stale-KB figures are never allowed
+    for amt in _MONEY_RE.findall(answer):
+        if amt.replace(",", "") not in allowed:
+            v.append(f"£{amt} does not appear in the knowledge base excerpts — you invented or "
+                     "calculated it, which is forbidden (rule 4). Remove the figure; describe the "
+                     "benefit without a made-up number.")
+    return v
+
+
+def _regenerate(msgs: List[Dict], draft: str, violations: List[str]) -> Optional[str]:
+    """One corrective, non-streaming, tool-free regeneration."""
+    fix_msgs = list(msgs)
+    fix_msgs.append({"role": "assistant", "content": draft})
+    fix_msgs.append({"role": "user", "content":
+        "SYSTEM CORRECTION — your draft above violates these rules:\n- "
+        + "\n- ".join(violations)
+        + "\nRewrite the reply now, fixing every violation. Keep it to 1-2 sentences, same tone, "
+          "plain text, no apologies. Output only the corrected reply."})
+    return _openai(fix_msgs, OPENAI_MODEL, LLM_MAX_TOKENS, 0.3)
+
+
+_LOCKED_PLANS_LINE = ("Fine Flow has three plans - Essential at £99/month (up to 50 vehicles), "
+                      "Core at £199/month (51-100) and Elite at £499/month (100+), plus "
+                      "pay-as-you-go at £2.75 per fine with no subscription.")
+_SAVINGS_LINE = "Fine Flow cuts admin time by up to 80% and makes sure you never miss a penalty deadline."
+
+
+def _hard_guard(answer: str, st: "State") -> str:
+    """Last-resort deterministic gate. Runs after the verifier/regeneration; guarantees
+    that stale-KB pricing and invented £-savings can never reach the user."""
+    out = answer
+    if re.search(r"£399|£2\.00\b", out) or re.search(r"\bAdvanced\b[^.]{0,50}(plan|£|\d)", out, re.I):
+        logger.error("HARD-GUARD pricing rewrite fired; original=%r", out[:200])
+        tail = "" if st.fleet_size else " How many vehicles are in your fleet?"
+        out = _LOCKED_PLANS_LINE + tail
+    if re.search(r"\bsav(e|es|ed|ing)\b[^.£]{0,60}£\s?[\d,]+", out, re.I):
+        logger.error("HARD-GUARD savings rewrite fired; original=%r", out[:200])
+        sentences = re.split(r"(?<=[.!?])\s+", out)
+        kept = [s for s in sentences
+                if not re.search(r"\bsav(e|es|ed|ing)\b[^.£]{0,60}£\s?[\d,]+", s, re.I)]
+        out = " ".join(kept).strip() or _SAVINGS_LINE
+    return out
 
 
 _OUTAGE = ("I'm having trouble reaching my knowledge base right now. The Fine Flow team can help "
@@ -633,6 +789,9 @@ def build_response_stream(query: str, session_id: str = "default", user_id: int 
     """
     Yields str text chunks as they arrive, then ONE final dict:
     {"answer": str, "request_email": bool, "trigger_ticket_popup": False}
+    NOTE: streamed chunks are raw model output; the final dict carries the cleaned
+    answer (hollow filler stripped). The widget should replace the streamed text
+    with the final answer when it arrives.
     """
     query = (query or "").strip()
     session_id = session_id or "default"
@@ -708,6 +867,27 @@ def build_response_stream(query: str, session_id: str = "default", user_id: int 
     if not answer:
         answer = "What would you like to know about Fine Flow — pricing, appeals, or how fines are captured?"
         yield answer
+
+    # v3.3: deterministic verifier — repetition and invented £ figures get one corrective pass.
+    violations = _find_violations(answer, st, kb_ctx)
+    if violations and answer not in (_OUTAGE,):
+        logger.warning("VERIFIER session=%s violations=%s", session_id, violations)
+        fixed = _regenerate(msgs, answer, violations)
+        if fixed:
+            fixed = _clean(fixed)
+            if fixed and not _find_violations(fixed, st, kb_ctx):
+                answer = fixed
+            elif fixed:
+                answer = fixed  # still better than a verbatim repeat; violations logged above
+
+    # v3.5: final deterministic gate — worst failure classes cannot pass this line.
+    answer = _hard_guard(answer, st)
+
+    # v3.2 tripwire: removed plans/prices appearing in an answer = stale KB deployed.
+    if _LOCKED_VIOLATION.search(answer):
+        logger.error("LOCKED-FACT VIOLATION session=%s answer=%r — the deployed KB still contains "
+                     "removed pricing (Advanced/£399/£2.00). Fix the KB file and re-embed "
+                     "(rm -rf data/chroma_db, restart).", session_id, answer[:200])
 
     # 4. Persist (SQL only)
     asked_q = _extract_question(answer)

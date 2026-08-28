@@ -1149,3 +1149,301 @@ requests.exceptions.ConnectionError: HTTPSConnectionPool(host='api.openai.com', 
 2026-08-28 14:56:16,095 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
 2026-08-28 14:56:32,804 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
 2026-08-28 14:56:37,816 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:56:42,828 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:56:47,838 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:56:50,146 INFO fineflow_nova: session=s_6xeewwtp q='hi' → search='hi'
+2026-08-28 14:56:57,219 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:57:02,229 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:57:07,241 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:57:12,260 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:57:17,272 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:57:22,285 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:57:27,297 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:57:32,308 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:57:37,321 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:57:42,336 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:57:42,868 INFO fineflow_nova: session=s_fvinbv9w q='hi' → search='hi'
+2026-08-28 14:57:49,565 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:57:54,578 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:57:59,592 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:58:04,602 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:58:09,617 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:58:14,632 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:58:19,644 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:58:24,657 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:58:28,220 INFO fineflow_nova: session=s_6xeewwtp q='related to appeals' → search='What information is available in the Fine Flow knowledge base regarding managing'
+2026-08-28 14:58:29,683 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:58:34,697 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:58:39,716 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:58:44,728 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:58:49,738 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:58:54,753 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:58:59,771 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:59:04,783 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:59:36,787 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:59:41,800 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:59:46,812 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:59:51,824 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:59:53,507 INFO fineflow_nova: session=s_6xeewwtp q='yes' → search='How does Fine Flow manage the appeal process for a specific fine that I would li'
+2026-08-28 15:00:01,085 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:00:06,095 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:00:11,108 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:00:16,119 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:00:21,133 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:00:26,144 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:01:14,055 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:01:19,072 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:01:24,083 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:01:29,095 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:01:30,949 INFO fineflow_nova: session=s_6xeewwtp q='londonand tomorrow' → search='What is the process for appealing a fine issued by a London council with a payme'
+2026-08-28 15:01:37,319 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:01:42,330 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:01:47,345 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:01:52,356 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:01:57,369 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:02:02,385 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:02:17,676 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:02:22,689 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:02:27,701 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:02:32,714 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:02:35,576 INFO fineflow_nova: session=s_6xeewwtp q='yes' → search='What specific assistance do I need with the appeal process for a fine issued by '
+2026-08-28 15:02:42,132 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:02:47,145 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:02:52,161 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:02:57,173 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:03:02,185 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:03:07,199 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:03:48,167 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:03:53,179 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:03:58,190 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:04:03,207 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:04:04,250 INFO fineflow_nova: session=s_6xeewwtp q='will you do an appeal for me my challan number is 234567  and fine is 12$' → search='will you do an appeal for me my challan number is 234567  and fine is 12$'
+2026-08-28 15:04:11,096 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:04:16,109 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:04:21,124 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:04:26,137 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:04:31,149 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:04:36,163 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:04:51,210 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:04:56,223 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:05:01,237 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:05:06,251 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:05:07,943 INFO fineflow_nova: session=s_6xeewwtp q='yes' → search='How can I initiate the dispute process for my fine with the challan number 23456'
+2026-08-28 15:05:15,196 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:05:20,210 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:05:25,221 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:05:30,237 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:05:35,254 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:05:40,268 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:08:31,216 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:08:36,228 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:08:41,239 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:08:46,256 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:08:47,489 INFO fineflow_nova: session=s_xhnj1sto q='hu' → search='hu'
+2026-08-28 15:08:54,048 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:08:59,059 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:09:04,073 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:09:09,086 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:09:14,100 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:09:19,117 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:11:10,465 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:11:15,481 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:11:20,492 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:11:25,505 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:11:28,787 INFO fineflow_nova: session=s_xhnj1sto q='disputes' → search="What information is available regarding disputes in Fine Flow's fleet fine manag"
+2026-08-28 15:11:35,096 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:11:40,106 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:11:45,123 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:11:50,137 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:11:55,149 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:12:00,171 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:12:27,752 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:12:32,770 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:12:37,783 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:12:42,797 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:12:45,347 INFO fineflow_nova: session=s_xhnj1sto q='yes' → search='What is the process for appealing a fine using Fine Flow, and how can I initiate'
+2026-08-28 15:12:51,525 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:12:56,536 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:13:01,554 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:13:06,567 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:13:11,585 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:13:16,597 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:13:44,381 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:13:49,393 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:13:54,405 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:13:59,420 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:14:01,191 INFO fineflow_nova: session=s_xhnj1sto q='paris,12$' → search="How can I appeal a fine issued by the Paris council for $12 using Fine Flow's fl"
+2026-08-28 15:14:08,067 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:14:13,081 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:14:18,093 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:14:23,105 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:14:28,120 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:14:33,132 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:15:14,745 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:15:19,759 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:15:24,768 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:15:29,785 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:15:32,317 INFO fineflow_nova: session=s_xhnj1sto q='what about payment plans' → search='What information is available regarding payment plans for fines managed through '
+2026-08-28 15:15:38,934 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:15:43,949 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:15:48,963 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:15:53,976 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:15:58,988 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:16:04,004 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:17:01,498 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:17:06,510 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:17:11,523 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:17:16,540 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:17:17,984 INFO fineflow_nova: session=s_xhnj1sto q="i'm confuses" → search="How can I find information about payment plans for Fine Flow's fleet fine manage"
+2026-08-28 15:17:25,019 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:17:30,032 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:17:35,046 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:17:40,059 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:17:45,071 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:17:50,086 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:18:21,815 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:18:26,829 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:18:31,842 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:18:36,859 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:18:39,643 INFO fineflow_nova: session=s_xhnj1sto q='i have 33 vehicles' → search='What subscription plan should I choose for a fleet of 33 vehicles using Fine Flo'
+2026-08-28 15:18:47,015 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:18:52,035 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:18:57,048 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:19:02,060 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:19:07,076 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:19:12,090 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:20:04,080 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:20:09,095 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:20:14,107 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:20:19,124 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:20:21,217 INFO fineflow_nova: session=s_xhnj1sto q='how much would i safe' → search='How much would I save with the Essential plan for my fleet of 33 vehicles using '
+2026-08-28 15:20:28,861 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:20:33,873 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:20:38,892 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:20:43,903 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:20:50,436 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:20:55,453 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:22:37,009 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:22:42,024 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:22:47,035 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:22:52,046 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:22:53,741 INFO fineflow_nova: session=s_xhnj1sto q='for 45 vehicles' → search='What subscription plan does Fine Flow recommend for a fleet of 45 vehicles, and '
+2026-08-28 15:23:00,101 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:23:05,115 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:23:10,128 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:23:15,140 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:23:20,153 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:23:25,166 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:25:15,695 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:25:20,707 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:25:25,720 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:25:30,736 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:25:33,342 INFO fineflow_nova: session=s_xhnj1sto q='yes' → search="What additional information or assistance can I receive regarding Fine Flow's fl"
+2026-08-28 15:25:39,573 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:25:44,584 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:25:49,597 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:25:54,616 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:25:59,632 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:26:04,644 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:27:55,037 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:28:00,048 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:28:05,060 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:28:10,072 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:28:12,065 INFO fineflow_nova: session=s_xhnj1sto q='what is app password' → search="What is the app password for Fine Flow's fleet fine management software?"
+2026-08-28 15:28:19,762 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:28:24,774 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:28:29,786 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:28:34,800 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:28:39,811 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:28:44,824 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:30:54,398 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:30:59,409 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:31:04,424 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:31:09,440 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:31:12,581 INFO fineflow_nova: session=s_xhnj1sto q="i'm getting a problem in connecting email" → search='How can I resolve issues with connecting my email to Fine Flow?'
+2026-08-28 15:31:21,311 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:31:26,323 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:31:31,337 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:31:36,349 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:31:41,361 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:31:46,373 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:32:42,251 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:32:47,263 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:32:52,278 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:32:57,298 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:32:59,475 INFO fineflow_nova: session=s_xhnj1sto q='musfarahw@gmail.com' → search='How can I resolve the email connection issue I am experiencing with Fine Flow us'
+2026-08-28 15:33:06,479 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:33:11,492 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:33:16,505 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:33:21,517 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:33:29,101 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:33:34,112 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:33:39,125 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:33:44,137 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:33:49,153 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 15:33:54,167 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 16:43:36,536 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-08-28 16:43:38,069 INFO fineflow_nova: MySQL connected
+2026-08-28 16:44:29,502 INFO fineflow_nova: session=s_fvinbv9w q='hi' → search='What are the reasons for purchasing Fine Flow and how does it benefit fleet mana'
+2026-08-28 16:44:52,928 INFO fineflow_nova: session=s_ngi069sa q='hi' → search='hi'
+2026-08-28 16:45:00,918 INFO fineflow_nova: session=s_ngi069sa q='how are you !' → search='How can I find information about the Fine Flow (UK fleet fine management softwar'
+2026-08-28 16:45:22,636 INFO fineflow_nova: session=s_ngi069sa q='im bored' → search='How can I find engaging features or resources within the Fine Flow (UK fleet fin'
+2026-08-28 16:45:29,900 INFO fineflow_nova: session=s_ngi069sa q='what is fineflow' → search='What is Fine Flow and what features does it offer for fleet fine management?'
+2026-08-28 16:45:44,203 INFO fineflow_nova: session=s_ngi069sa q='what are the pricing plans !' → search='What are the pricing plans for Fine Flow, the UK fleet fine management software?'
+2026-08-28 16:45:46,421 ERROR fineflow_nova: LOCKED-FACT VIOLATION session=s_ngi069sa answer='Fine Flow offers several pricing plans based on fleet size: \nEssential: £99/month for 5–50 vehicles\nCore: £199/month for 51–100 vehicles\nAdvanced: £399/month for 101–200 vehicles\nElite: £499/month for' — the deployed KB still contains removed pricing (Advanced/£399/£2.00). Fix the KB file and re-embed (rm -rf data/chroma_db, restart).
+2026-08-28 16:45:51,895 INFO fineflow_nova: session=s_ngi069sa q='5' → search="What are the pricing plans for Fine Flow's fleet fine management software, speci"
+2026-08-28 16:46:00,202 INFO fineflow_nova: session=s_ngi069sa q='yes' → search='What are the features included in the Essential pricing plan for Fine Flow, whic'
+2026-08-28 16:46:14,143 INFO fineflow_nova: session=s_ngi069sa q='40 f' → search='What are the features and benefits of the Essential pricing plan for Fine Flow, '
+2026-08-28 16:47:13,220 INFO fineflow_nova: session=s_ngi069sa q='is it worth it for us' → search='Is the Essential plan for Fine Flow worth it for a fleet with 5 vehicles and 40 '
+2026-08-28 16:47:21,387 INFO fineflow_nova: session=s_ngi069sa q='ok how do i dign up' → search='How do I sign up for the Fine Flow Essential plan for managing fines with my fle'
+2026-08-28 16:47:47,115 INFO fineflow_nova: session=s_ngi069sa q='hi again' → search="How can I sign up for Fine Flow's Essential plan for managing fines with my flee"
+2026-08-28 16:48:00,838 INFO fineflow_nova: session=s_ngi069sa q='what did i tell you about my fleet' → search='What information did I provide about my fleet size and the number of fines I han'
+2026-08-28 16:48:16,975 INFO fineflow_nova: session=s_ngi069sa q='no i said 8' → search='How can I update the number of vehicles in my Fine Flow account from 5 to 8?'
+2026-08-28 16:48:25,838 INFO fineflow_nova: session=s_ngi069sa q='which plan im on then !' → search='What plan am I on if I have a fleet of 8 vehicles and handle 40 fines each month'
+2026-08-28 16:48:52,843 INFO fineflow_nova: session=s_ngi069sa q='appeals' → search='What information is available regarding the appeals process for fines managed th'
+2026-08-28 16:49:02,896 INFO fineflow_nova: session=s_ngi069sa q='yes' → search="What is the process for appealing a fine using Fine Flow's automated system?"
+2026-08-28 16:49:13,851 INFO fineflow_nova: session=s_ngi069sa q='yes' → search="What is the process for appealing a specific fine using Fine Flow's fleet fine m"
+2026-08-28 16:49:20,815 INFO fineflow_nova: session=s_ngi069sa q='no' → search="What should I do if I do not have a specific fine to appeal in Fine Flow's appea"
+2026-08-28 16:49:29,312 INFO fineflow_nova: session=s_ngi069sa q='yes' → search='What is the process for appealing a specific fine using Fine Flow, and what info'
+2026-08-28 16:49:37,505 INFO fineflow_nova: session=s_ngi069sa q='ok' → search='What steps should I take to appeal a specific fine using Fine Flow, and what inf'
+2026-08-28 17:00:15,429 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-08-28 17:00:17,053 INFO fineflow_nova: MySQL connected
+2026-08-28 17:00:49,362 INFO fineflow_nova: session=s_s0s6fbgb q='what are the pricing plans v' → search='what are the pricing plans v'
+2026-08-28 17:00:51,970 ERROR fineflow_nova: LOCKED-FACT VIOLATION session=s_s0s6fbgb answer='Fine Flow offers four subscription plans based on fleet size, plus a pay-as-you-go option. Essential is £99/month for 5–50 vehicles, Core is £199/month for 51–100 vehicles, Advanced is £399/month for ' — the deployed KB still contains removed pricing (Advanced/£399/£2.00). Fix the KB file and re-embed (rm -rf data/chroma_db, restart).
+2026-08-28 17:01:00,104 INFO fineflow_nova: session=s_s0s6fbgb q='is there an adnavce plan ?' → search='Is there an Advanced plan available for Fine Flow fleet fine management software'
+2026-08-28 17:01:01,829 ERROR fineflow_nova: LOCKED-FACT VIOLATION session=s_s0s6fbgb answer='Yes, Fine Flow offers an Advanced plan for £399/month, suitable for fleets with 101–200 vehicles.' — the deployed KB still contains removed pricing (Advanced/£399/£2.00). Fix the KB file and re-embed (rm -rf data/chroma_db, restart).
+2026-08-28 17:01:08,203 INFO fineflow_nova: session=s_s0s6fbgb q='8' → search='What are the details of the Advanced plan offered by Fine Flow for fleet managem'
+2026-08-28 17:01:09,585 WARNING fineflow_nova: VERIFIER session=s_s0s6fbgb violations=['Your reply is identical to your previous reply. Say something different: acknowledge their last message and either rephrase your question with a concrete example or pivot to a different useful topic.']
+2026-08-28 17:01:11,272 ERROR fineflow_nova: LOCKED-FACT VIOLATION session=s_s0s6fbgb answer="Yes, there's an Advanced plan for £399/month, perfect for fleets with 101–200 vehicles. Do you have a specific fine you're looking to manage with Fine Flow?" — the deployed KB still contains removed pricing (Advanced/£399/£2.00). Fix the KB file and re-embed (rm -rf data/chroma_db, restart).
+2026-08-28 17:01:31,857 INFO fineflow_nova: session=s_s0s6fbgb q='40ish' → search='What are the details of the Advanced plan offered by Fine Flow for fleet fine ma'
+2026-08-28 17:01:41,484 INFO fineflow_nova: session=s_s0s6fbgb q='convice me' → search='What are the key benefits and features of the Essential plan for Fine Flow that '
+2026-08-28 17:01:58,481 INFO fineflow_nova: session=s_s0s6fbgb q='is it worthit for us !' → search='Is Fine Flow worth it for a fleet of around 40 vehicles?'
+2026-08-28 17:03:09,967 INFO fineflow_nova: session=s_s0s6fbgb q='comnvience me' → search='What are the key benefits of using Fine Flow for managing fines in a fleet of ar'
+2026-08-28 17:03:21,221 INFO fineflow_nova: session=s_s0s6fbgb q='ok sign me up' → search='How can I sign up for Fine Flow UK fleet fine management software?'
+2026-08-28 17:03:46,518 INFO fineflow_nova: session=s_s0s6fbgb q='what did i tell you' → search='What steps should I take next to set up my Fine Flow account after expressing in'
+2026-08-28 17:04:00,533 INFO fineflow_nova: session=s_s0s6fbgb q='acurtally its 60 vehichles' → search='What is the process for signing up for Fine Flow if my fleet size is actually 60'
+2026-08-28 17:04:33,747 INFO fineflow_nova: session=s_s0s6fbgb q='so what i am paying !' → search='What is the monthly payment for the Core plan of Fine Flow for a fleet size of 6'
+2026-08-28 17:04:48,470 INFO fineflow_nova: session=s_s0s6fbgb q='appeals' → search='What features does the Fine Flow software offer for managing appeals in the Core'
+2026-08-28 17:05:04,454 INFO fineflow_nova: session=s_s0s6fbgb q='yes' → search='What are the next steps for setting up an account with Fine Flow after confirmin'
+2026-08-28 17:05:27,179 INFO fineflow_nova: session=s_s0s6fbgb q='no' → search='What are the next steps for account setup after expressing interest in signing u'
+2026-08-28 17:05:40,076 INFO fineflow_nova: session=s_s0s6fbgb q='ok' → search='What are the next steps for account setup after expressing interest in signing u'
+2026-08-28 17:05:53,085 INFO fineflow_nova: session=s_s0s6fbgb q='yes' → search='What are the next steps for account setup after expressing interest in signing u'
+2026-08-28 17:06:03,940 INFO fineflow_nova: session=s_s0s6fbgb q='17' → search='What does the number 17 refer to in the context of my current fine management pr'
+2026-08-28 17:06:06,246 WARNING fineflow_nova: VERIFIER session=s_s0s6fbgb violations=['Your reply is identical to your previous reply. Say something different: acknowledge their last message and either rephrase your question with a concrete example or pivot to a different useful topic.', 'You already asked this exact question earlier: "Which council issued the fine, and when is the payment deadline?". Never repeat a question. Either ask for the missing detail in clearly different words with an example, or drop the thread and pivot.']
+2026-08-28 17:06:13,258 INFO fineflow_nova: session=s_s0s6fbgb q='hmmm' → search='What should I do if I am unsure about the urgency of fines that are close to the'
+2026-08-28 17:06:16,597 WARNING fineflow_nova: VERIFIER session=s_s0s6fbgb violations=['You already asked this exact question earlier: "Is there a particular stage in your fine management process that\'s causing the most headaches?". Never repeat a question. Either ask for the missing detail in clearly different words with an example, or drop the thread and pivot.']
+2026-08-28 17:06:29,950 INFO fineflow_nova: session=s_s0s6fbgb q='my gmail wont connect' → search='How can I troubleshoot issues with connecting my Gmail account to the Fine Flow '
+2026-08-28 17:06:44,697 INFO fineflow_nova: session=s_s0s6fbgb q='test@qa-fineflow.co.uk' → search='How can I resolve the issue of my Gmail not connecting to the Fine Flow (UK flee'
+2026-08-28 17:07:46,458 INFO fineflow_nova: session=s_s0s6fbgb q='i have  problem with billing' → search="How can I resolve a billing problem with Fine Flow's fleet fine management softw"
+2026-08-28 17:08:06,718 INFO fineflow_nova: session=s_s0s6fbgb q='how do i contact support !' → search='How do I contact Fine Flow support for assistance with my issues?'
+2026-08-28 17:08:26,888 INFO fineflow_nova: session=s_s0s6fbgb q='can you pay fines' → search='Can Fine Flow (UK fleet fine management software) facilitate the payment of fine'
+2026-08-28 17:08:36,002 INFO fineflow_nova: session=s_s0s6fbgb q='can you pay my fines' → search='Can Fine Flow (UK fleet fine management software) pay my fines directly?'
+2026-08-28 17:08:52,497 INFO fineflow_nova: session=s_s0s6fbgb q='do you store card details' → search='Does Fine Flow store card details for billing purposes?'
+2026-08-28 17:09:00,067 INFO fineflow_nova: session=s_s0s6fbgb q='write code in python' → search="How can I write code in Python to integrate with Fine Flow's fleet fine manageme"
+2026-08-28 17:09:13,584 INFO fineflow_nova: session=s_s0s6fbgb q='tell me a joke' → search='How can I find jokes related to fleet management or fines in the Fine Flow knowl'
+2026-08-28 17:09:17,150 WARNING fineflow_nova: VERIFIER session=s_s0s6fbgb violations=['Your reply is identical to your previous reply. Say something different: acknowledge their last message and either rephrase your question with a concrete example or pivot to a different useful topic.', 'You already asked this exact question earlier: "I\'m here to help with fleet fine management — anything about fines, Fine Flow or appeals?". Never repeat a question. Either ask for the missing detail in clearly different words with an example, or drop the thread and pivot.']
+2026-08-28 17:09:27,941 INFO fineflow_nova: session=s_s0s6fbgb q='what you think of chatgpt !' → search='What information is available in the Fine Flow knowledge base regarding customer'
+2026-08-28 17:09:32,368 WARNING fineflow_nova: VERIFIER session=s_s0s6fbgb violations=['You already asked this exact question earlier: "I\'m here to help with fleet fine management — anything about fines, Fine Flow or appeals?". Never repeat a question. Either ask for the missing detail in clearly different words with an example, or drop the thread and pivot.']
+2026-08-28 17:09:55,598 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-08-28 17:09:57,056 INFO fineflow_nova: MySQL connected
+2026-08-28 17:10:12,057 INFO fineflow_nova: session=s_s0s6fbgb q='what did i tell uh ?' → search='What information did the customer provide regarding their fleet size, interest i'

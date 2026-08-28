@@ -1447,3 +1447,5 @@ requests.exceptions.ConnectionError: HTTPSConnectionPool(host='api.openai.com', 
 2026-08-28 17:09:55,598 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
 2026-08-28 17:09:57,056 INFO fineflow_nova: MySQL connected
 2026-08-28 17:10:12,057 INFO fineflow_nova: session=s_s0s6fbgb q='what did i tell uh ?' → search='What information did the customer provide regarding their fleet size, interest i'
+2026-08-28 17:24:02,991 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-08-28 17:24:04,467 INFO fineflow_nova: MySQL connected

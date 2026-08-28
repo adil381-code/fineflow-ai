@@ -22,11 +22,13 @@ OPENAI_API_URL       = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1/ch
 OPENAI_EMBED_MODEL   = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
 OPENAI_EMBED_API_URL = os.getenv("OPENAI_EMBED_API_URL", "https://api.openai.com/v1/embeddings")
 
-LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.4"))
-LLM_MAX_TOKENS  = int(os.getenv("LLM_MAX_TOKENS", "280"))
+LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.55"))
+LLM_MAX_TOKENS  = int(os.getenv("LLM_MAX_TOKENS", "110"))
 
 # ── Retrieval ────────────────────────────────────────────────────────────────
 TOP_K           = int(os.getenv("TOP_K", "6"))
+CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.35"))
+
 CHUNK_MAX_CHARS = int(os.getenv("CHUNK_MAX_CHARS", "2200"))
 
 # ── Memory ───────────────────────────────────────────────────────────────────

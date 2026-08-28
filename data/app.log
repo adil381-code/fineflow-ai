@@ -939,3 +939,190 @@ requests.exceptions.ConnectionError: HTTPSConnectionPool(host='api.openai.com', 
 2026-08-27 14:57:21,471 INFO fineflow_nova: session=s_5m88c2t7 q='ok thank ypou' → search='How can I express my gratitude to the Fine Flow support team for their assistanc'
 2026-08-27 14:57:42,177 INFO fineflow_nova: session=s_5m88c2t7 q='yes make me intouch' → search='How can I get in touch with the Fine Flow team for assistance with my appeal or '
 2026-08-27 14:58:00,316 INFO fineflow_nova: session=s_5m88c2t7 q='acil@gmail.com' → search='How does Fine Flow assist users in making an appeal for fines, and what features'
+2026-08-27 15:06:02,519 INFO fineflow_nova: session=s_u7uvxkaf q='hi' → search="What is the go-to payment plan for Fine Flow's fleet fine management software?"
+2026-08-27 15:07:00,184 INFO fineflow_nova: session=s_u7uvxkaf q='what is fine flow' → search='What is Fine Flow and what features does it offer for fleet fine management?'
+2026-08-27 15:08:24,228 INFO fineflow_nova: session=s_u7uvxkaf q='yes' → search='What is the purpose and functionality of Fine Flow, the UK fleet fine management'
+2026-08-27 15:08:48,345 INFO fineflow_nova: session=s_5m88c2t7 q='hi' → search='How can I contact the Fine Flow team for assistance with my fine appeal process?'
+2026-08-27 15:09:45,839 INFO fineflow_nova: session=s_5m88c2t7 q='hi' → search='How can I get in touch with the Fine Flow team regarding my inquiry about the ap'
+2026-08-27 15:10:25,200 INFO fineflow_nova: session=s_u7uvxkaf q='how to mount my gmail' → search='How can I mount my Gmail account to Fine Flow for fine management?'
+2026-08-27 15:11:01,599 INFO fineflow_nova: session=s_u7uvxkaf q='how long will it take the appeal to be proceeded' → search='How long will it take for an appeal to be processed in Fine Flow?'
+2026-08-27 15:11:23,485 INFO fineflow_nova: session=s_u7uvxkaf q='yes' → search='How long does it typically take for an appeal to be processed after a driver dis'
+2026-08-27 15:12:21,814 INFO fineflow_nova: session=s_5m88c2t7 q='yez' → search='What information is available regarding the appeal process for fines using Fine '
+2026-08-27 15:14:58,834 INFO fineflow_nova: session=s_5m88c2t7 q='how long will it take appeal to be proceded' → search='What is the typical duration for the appeal process to be completed in Fine Flow'
+2026-08-27 15:15:47,621 INFO fineflow_nova: session=s_5m88c2t7 q='yes' → search='What is the typical duration for the appeal process to be completed when using F'
+2026-08-27 15:16:29,686 INFO fineflow_nova: session=s_5m88c2t7 q='yes' → search='What is the typical duration for the appeal process when using Fine Flow for dis'
+2026-08-27 15:17:45,603 INFO fineflow_nova: session=s_5m88c2t7 q='london' → search='What is the typical duration for the appeal process when disputing a fine issued'
+2026-08-27 15:21:01,244 INFO fineflow_nova: session=s_u7uvxkaf q='what is go to plan' → search='What is the process for creating a go-to plan within Fine Flow for managing flee'
+2026-08-27 15:21:33,556 INFO fineflow_nova: session=s_u7uvxkaf q='5' → search='What are the different subscription plans available for Fine Flow fleet fine man'
+2026-08-27 15:21:49,996 INFO fineflow_nova: session=s_u7uvxkaf q='yes' → search='What specific questions do I need to ask about the Essential plan or its feature'
+2026-08-27 15:25:49,555 INFO fineflow_nova: session=s_u7uvxkaf q="i'm getting bored" → search='What features or additional information about the Fine Flow Essential plan can I'
+2026-08-27 15:33:51,859 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=0
+2026-08-27 15:33:53,190 INFO fineflow_nova: MySQL connected
+2026-08-27 15:33:58,045 INFO fineflow_nova: Index empty — building now
+2026-08-27 15:34:05,506 INFO fineflow_nova: Indexed 31/31
+2026-08-27 15:34:05,506 INFO fineflow_nova: Index built: 31 chunks from 1 files
+2026-08-27 15:34:21,519 INFO fineflow_nova: session=s_u7uvxkaf q='hu' → search='What are some engaging features or aspects of Fine Flow that I can explore to ke'
+2026-08-27 15:35:00,494 INFO fineflow_nova: session=s_u7uvxkaf q='appeals' → search='What information is available about the appeals process in Fine Flow, including '
+2026-08-27 15:35:15,558 INFO fineflow_nova: session=s_u7uvxkaf q='yes' → search='What are the details of the appeal process in Fine Flow, including how disputes '
+2026-08-27 15:35:16,408 INFO fineflow_nova: session=s_zoq77znp q='hi' → search='hi'
+2026-08-27 15:35:32,145 INFO fineflow_nova: session=s_zoq77znp q='hu' → search="What information can I find about Fine Flow's features and functionalities?"
+2026-08-27 15:36:21,508 INFO fineflow_nova: session=s_u7uvxkaf q='london' → search='What information does Fine Flow provide regarding managing fines and appeals in '
+2026-08-27 15:36:21,706 INFO fineflow_nova: session=s_zoq77znp q='appeals' → search="What is the appeals process for fleet fines in Fine Flow's management software?"
+2026-08-27 15:36:40,210 INFO fineflow_nova: session=s_zoq77znp q='yeah , parking fine' → search="What is the process for appealing a parking fine using Fine Flow's fleet fine ma"
+2026-08-27 15:36:51,128 INFO fineflow_nova: session=s_zoq77znp q='london' → search='How does Fine Flow handle the appeal process for parking fines issued by council'
+2026-08-27 15:37:20,822 INFO fineflow_nova: session=s_zoq77znp q='i dont know' → search='What should I do if I do not know the payment deadline for my parking fine in Lo'
+2026-08-27 15:37:21,220 INFO fineflow_nova: session=s_u7uvxkaf q='overspeeding' → search='What is the process for appealing an overspeeding fine using Fine Flow, and how '
+2026-08-27 15:38:07,036 INFO fineflow_nova: session=s_zoq77znp q='how fineflow help fleet to save its time ?' → search='How does Fine Flow help fleets save time in managing parking fines and appeals?'
+2026-08-27 15:38:19,949 INFO fineflow_nova: session=s_zoq77znp q='32' → search='How does Fine Flow help fleets save time in managing parking fines?'
+2026-08-27 15:38:52,071 INFO fineflow_nova: session=s_zoq77znp q='39' → search='How does Fine Flow help fleets save time and money when managing parking fines, '
+2026-08-27 15:39:29,324 INFO fineflow_nova: session=s_zoq77znp q='654' → search='How does Fine Flow help fleets save time and manage a high volume of parking fin'
+2026-08-27 15:40:20,104 INFO fineflow_nova: session=s_zoq77znp q='ho' → search='How does Fine Flow manage the appeals process for parking fines, and what featur'
+2026-08-27 15:43:29,960 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-08-27 15:43:39,852 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-08-27 15:43:41,304 INFO fineflow_nova: MySQL connected
+2026-08-27 15:44:29,253 INFO fineflow_nova: session=s_ivhslx6t q='hi' → search='hi'
+2026-08-27 15:44:37,436 INFO fineflow_nova: session=s_ivhslx6t q='how are you .' → search='How can I find information about the Fine Flow (UK fleet fine management softwar'
+2026-08-27 15:44:56,812 INFO fineflow_nova: session=s_ivhslx6t q='why i use fineflow' → search='Why should I use Fine Flow for fleet fine management?'
+2026-08-27 15:46:49,955 INFO fineflow_nova: session=s_u7uvxkaf q='hi' → search='What specific questions do I need to ask about the Fine Flow Essential plan or i'
+2026-08-27 15:49:46,141 INFO fineflow_nova: session=s_u7uvxkaf q='how much time of me has been saved' → search='How can I find out how much time has been saved using Fine Flow for managing ove'
+2026-08-27 15:50:06,225 INFO fineflow_nova: session=s_u7uvxkaf q='gmail mounting' → search='What are the steps to mount Gmail for managing Fine Flow notifications and commu'
+2026-08-27 15:50:29,102 INFO fineflow_nova: session=s_u7uvxkaf q='connecting gmail' → search='How do I connect my Gmail account to Fine Flow for monitoring incoming fine noti'
+2026-08-27 15:50:51,530 INFO fineflow_nova: session=s_u7uvxkaf q='yes' → search='What are the steps to connect my Gmail account to Fine Flow for monitoring incom'
+2026-08-27 15:51:10,796 INFO fineflow_nova: session=s_u7uvxkaf q='connecting' → search='How do I connect my Gmail account to Fine Flow for monitoring incoming fine noti'
+2026-08-27 15:52:05,037 INFO fineflow_nova: session=s_u7uvxkaf q='how long will it take the appeal to be proceded' → search='How long will it take for the appeal regarding the overspeeding fine from the Lo'
+2026-08-27 15:56:17,025 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-08-27 15:56:18,363 INFO fineflow_nova: MySQL connected
+2026-08-27 15:56:37,285 INFO fineflow_nova: session=s_u7uvxkaf q='hi' → search='What is the typical processing time for an appeal submitted through Fine Flow, s'
+2026-08-27 15:57:06,656 INFO fineflow_nova: session=s_l7mjh839 q='hi' → search='hi'
+2026-08-27 15:57:29,591 INFO fineflow_nova: session=s_l7mjh839 q='anythinf' → search="What information is available regarding Fine Flow's features and functionalities"
+2026-08-27 15:57:34,959 INFO fineflow_nova: session=s_u7uvxkaf q='hi' → search='What is the typical processing time for an appeal submitted through Fine Flow fo'
+2026-08-27 15:57:40,571 INFO fineflow_nova: session=s_l7mjh839 q='fines' → search='What information is available about managing fines using Fine Flow fleet fine ma'
+2026-08-27 15:58:04,798 INFO fineflow_nova: session=s_u7uvxkaf q='what is fineflow' → search='What is Fine Flow and how does it assist with fleet fine management?'
+2026-08-27 15:58:12,890 INFO fineflow_nova: session=s_l7mjh839 q='yes , how time to get fines done managed' → search='What is the typical time frame for managing fines using Fine Flow in UK fleet fi'
+2026-08-27 15:58:26,150 INFO fineflow_nova: session=s_u7uvxkaf q='how many vehicles will it tackle' → search='How many vehicles can Fine Flow manage within its fleet fine management software'
+2026-08-27 15:58:35,532 INFO fineflow_nova: session=s_l7mjh839 q='how to make an appeal .' → search='How can I make an appeal for a fleet fine using Fine Flow software?'
+2026-08-27 15:58:54,215 INFO fineflow_nova: session=s_l7mjh839 q='can fineflow irself make an appeal' → search='Can Fine Flow itself make an appeal on behalf of the driver for fleet fines?'
+2026-08-27 15:59:14,650 INFO fineflow_nova: session=s_l7mjh839 q='how it will help fleets to save their time' → search='How does Fine Flow help fleets save time in managing fines?'
+2026-08-27 15:59:23,705 INFO fineflow_nova: session=s_l7mjh839 q='65' → search='How does Fine Flow help fleets save time, particularly for a fleet of 65 vehicle'
+2026-08-27 16:00:00,450 INFO fineflow_nova: session=s_u7uvxkaf q='5' → search='What is the appeal processing time for an overspeeding fine, and which council s'
+2026-08-27 16:00:03,170 INFO fineflow_nova: session=s_l7mjh839 q='how much it will costs me ?' → search='What is the cost of using Fine Flow for managing fleet fines for a fleet of 65 v'
+2026-08-27 16:00:32,526 INFO fineflow_nova: session=s_l7mjh839 q='210' → search='What is the cost of using Fine Flow for a fleet of 65 vehicles that typically ha'
+2026-08-27 16:00:56,294 INFO fineflow_nova: session=s_l7mjh839 q='765' → search='What is the cost of using Fine Flow for a fleet of 65 vehicles that typically ha'
+2026-08-27 16:06:43,916 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-08-27 16:06:45,227 INFO fineflow_nova: MySQL connected
+2026-08-27 16:09:36,555 INFO fineflow_nova: session=s_u7uvxkaf q='hi' → search='What is the appeal processing time for an overspeeding fine, and which council s'
+2026-08-27 16:09:54,681 INFO fineflow_nova: session=s_u7uvxkaf q='45' → search='What is the recommended Fine Flow subscription plan for managing 45 vehicles in '
+2026-08-27 16:10:48,369 INFO fineflow_nova: session=s_wxuw87wp q='hi' → search='hi'
+2026-08-27 16:11:24,733 INFO fineflow_nova: session=s_wxuw87wp q='34' → search='What does the number 34 refer to in the context of Fine Flow UK fleet fine manag'
+2026-08-27 16:11:37,605 INFO fineflow_nova: session=s_wxuw87wp q='543' → search='What is the recommended Fine Flow plan for a fleet of 34 vehicles that deals wit'
+2026-08-27 16:11:47,441 INFO fineflow_nova: session=s_wxuw87wp q='how to make an appeal?' → search="How can I make an appeal using Fine Flow's fleet fine management software?"
+2026-08-27 16:12:06,574 INFO fineflow_nova: session=s_wxuw87wp q='no' → search="How can I make an appeal for a fine using Fine Flow's fleet fine management soft"
+2026-08-27 16:16:12,775 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-08-27 16:16:14,077 INFO fineflow_nova: MySQL connected
+2026-08-27 16:34:58,348 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-08-27 16:34:59,674 INFO fineflow_nova: MySQL connected
+2026-08-27 16:54:19,191 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=0
+2026-08-27 16:54:20,594 INFO fineflow_nova: MySQL connected
+2026-08-27 16:54:25,556 INFO fineflow_nova: Index empty — building now
+2026-08-27 16:54:29,201 INFO fineflow_nova: Indexed 31/31
+2026-08-27 16:54:29,201 INFO fineflow_nova: Index built: 31 chunks from 1 files
+2026-08-27 16:56:48,703 INFO fineflow_nova: session=s_l7mjh839 q='hi' → search='How can I find information about the costs associated with the Fine Flow fleet f'
+2026-08-27 16:57:04,387 INFO fineflow_nova: session=s_l7mjh839 q='hi' → search='How can I manage fleet fines and the appeal process using Fine Flow, and what st'
+2026-08-27 16:57:20,937 INFO fineflow_nova: session=s_l7mjh839 q='how are you' → search='How can I find information about the features and benefits of Fine Flow for mana'
+2026-08-27 16:57:29,864 INFO fineflow_nova: session=s_l7mjh839 q='what you do !' → search='What features and functionalities does Fine Flow offer for managing UK fleet fin'
+2026-08-28 12:44:19,882 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-08-28 12:46:19,510 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-08-28 12:46:21,097 INFO fineflow_nova: MySQL connected
+2026-08-28 12:56:17,933 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-08-28 12:56:19,316 INFO fineflow_nova: MySQL connected
+2026-08-28 12:57:07,342 INFO fineflow_nova: session=s_fvinbv9w q='hi' → search='How can I contact the Fine Flow support team for assistance with my Gmail connec'
+2026-08-28 12:57:22,126 INFO fineflow_nova: session=s_fvinbv9w q='hi' → search='What steps should I take to connect my Gmail account to Fine Flow, and how can I'
+2026-08-28 12:57:29,779 INFO fineflow_nova: session=s_fvinbv9w q='how are you !' → search='How can I find information on how to contact the support team for Fine Flow if I'
+2026-08-28 12:57:41,677 INFO fineflow_nova: session=s_fvinbv9w q='fines' → search='What information is available about fines in the Fine Flow (UK fleet fine manage'
+2026-08-28 12:57:56,121 INFO fineflow_nova: session=s_fvinbv9w q='how much it cost' → search='What is the cost of Fine Flow UK fleet fine management software?'
+2026-08-28 12:58:09,593 INFO fineflow_nova: session=s_fvinbv9w q='how it will help fleet to save their time' → search='How does Fine Flow help fleets save time in managing fines?'
+2026-08-28 12:58:20,587 INFO fineflow_nova: session=s_fvinbv9w q='why is use fineflow ?' → search='Why should I use Fine Flow for managing UK fleet fines?'
+2026-08-28 12:58:30,108 INFO fineflow_nova: session=s_fvinbv9w q='i have an issue' → search="What should I do if I have an issue with Fine Flow's fleet fine management softw"
+2026-08-28 12:58:40,360 INFO fineflow_nova: session=s_fvinbv9w q='why i buy fineflow' → search='Why should I purchase Fine Flow for my fleet management needs?'
+2026-08-28 12:59:03,005 INFO fineflow_nova: session=s_wxuw87wp q='hi there' → search='How can I find information on how to make an appeal using Fine Flow fleet fine m'
+2026-08-28 12:59:10,905 INFO fineflow_nova: session=s_wxuw87wp q='how are you !' → search='How can I find information about the appeal process in Fine Flow (UK fleet fine '
+2026-08-28 12:59:23,667 INFO fineflow_nova: session=s_wxuw87wp q='what i fineflow' → search='What is Fine Flow and how does it work in fleet fine management?'
+2026-08-28 12:59:32,362 INFO fineflow_nova: session=s_wxuw87wp q='why i use this ?' → search="Why should I use Fine Flow for managing my fleet's fines?"
+2026-08-28 12:59:39,150 INFO fineflow_nova: session=s_wxuw87wp q='how much time it will save of mine' → search='How much time will Fine Flow save me in managing fines for my fleet?'
+2026-08-28 12:59:51,525 INFO fineflow_nova: session=s_wxuw87wp q='yes' → search='What are the specific features of Fine Flow that automate fine management tasks '
+2026-08-28 13:00:17,724 INFO fineflow_nova: session=s_wxuw87wp q='how much it will cost mew' → search='What is the cost of using Fine Flow for fleet fine management, specifically for '
+2026-08-28 13:00:35,234 INFO fineflow_nova: session=s_wxuw87wp q='yeah sure' → search='What is the contact information for the sales team at Fine Flow for inquiries ab'
+2026-08-28 13:00:53,254 INFO fineflow_nova: session=s_wxuw87wp q='adil381@gmail.com' → search='What is the process for contacting the Fine Flow sales team, and how can I provi'
+2026-08-28 13:01:20,389 INFO fineflow_nova: session=s_wxuw87wp q='how much it will cost me ?' → search='What is the cost of the Fine Flow fleet fine management software for a fleet of '
+2026-08-28 13:01:48,032 INFO fineflow_nova: session=s_wxuw87wp q='yes sure' → search='What are the costs associated with the Essential plan for Fine Flow, and what fe'
+2026-08-28 13:04:02,532 INFO fineflow_nova: session=s_u7uvxkaf q='hi' → search='What is the appeal processing time for an overspeeding fine, and how can I track'
+2026-08-28 13:04:25,925 INFO fineflow_nova: session=s_u7uvxkaf q='appeals' → search='What is the appeal processing time for overspeeding fines in Fine Flow, and how '
+2026-08-28 13:05:04,310 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-08-28 13:05:05,846 INFO fineflow_nova: MySQL connected
+2026-08-28 13:05:31,973 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-08-28 13:05:33,493 INFO fineflow_nova: MySQL connected
+2026-08-28 13:05:57,962 INFO fineflow_nova: session=s_u7uvxkaf q='hi' → search='What is the appeal processing time for an overspeeding fine, and how can I track'
+2026-08-28 13:06:20,301 INFO fineflow_nova: session=s_u7uvxkaf q='appeals' → search='What is the appeal process managed by Fine Flow for handling fines?'
+2026-08-28 13:06:41,702 INFO fineflow_nova: session=s_l7mjh839 q='What is the appeal processing time for an overspeeding fine, and how can I track' → search='What is the appeal processing time for an overspeeding fine, and how can I track'
+2026-08-28 13:06:44,442 INFO fineflow_nova: session=s_u7uvxkaf q='yes' → search='What is the process for managing appeals in Fine Flow, and how does the system a'
+2026-08-28 13:06:54,704 INFO fineflow_nova: session=s_u7uvxkaf q='yes' → search='What specific assistance do I need with the appeal process for managing fines us'
+2026-08-28 13:07:34,985 INFO fineflow_nova: session=s_u7uvxkaf q='london' → search='What is the process for appealing a fine issued by a council in London using Fin'
+2026-08-28 13:08:05,049 INFO fineflow_nova: session=s_u7uvxkaf q='what is go to plan' → search='What is the go-to plan for using Fine Flow for managing fines, specifically for '
+2026-08-28 13:08:30,958 INFO fineflow_nova: session=s_wxuw87wp q='what is go to plan' → search='What is the recommended plan for using Fine Flow for a fleet of 34 vehicles?'
+2026-08-28 13:08:41,684 INFO fineflow_nova: session=s_wxuw87wp q='pay as you go' → search='What are the details and costs associated with the pay-as-you-go plan for Fine F'
+2026-08-28 13:08:54,304 INFO fineflow_nova: session=s_u7uvxkaf q="i'm confused" → search='What are the details and differences between the subscription plans offered by F'
+2026-08-28 13:11:08,236 INFO fineflow_nova: session=s_u7uvxkaf q='how long will it take the appeal to proceed' → search='How long does the appeal process take when using Fine Flow for managing fines?'
+2026-08-28 13:11:51,420 INFO fineflow_nova: session=s_u7uvxkaf q='i have 32 fines and 5 vehicles' → search='What is the recommended Fine Flow subscription plan for managing 32 fines with a'
+2026-08-28 13:13:22,577 INFO fineflow_nova: session=s_u7uvxkaf q='what are pricing plans' → search="What are the pricing plans for Fine Flow's fleet fine management software?"
+2026-08-28 13:13:46,025 INFO fineflow_nova: session=s_u7uvxkaf q='yes' → search='What is the appeal process timeline for fines issued by UK councils, and how doe'
+2026-08-28 13:14:06,263 INFO fineflow_nova: session=s_u7uvxkaf q='how many fines i have in my dashboard' → search='How can I check the number of fines I have in my Fine Flow dashboard?'
+2026-08-28 13:14:44,186 INFO fineflow_nova: session=s_u7uvxkaf q='how should i mount my gmail' → search="How should I mount my Gmail for use with Fine Flow's fleet fine management softw"
+2026-08-28 13:15:07,636 INFO fineflow_nova: session=s_u7uvxkaf q='what is app password and how should i get it' → search='What is an app password in the context of connecting Gmail to Fine Flow, and how'
+2026-08-28 13:16:11,838 INFO fineflow_nova: session=s_u7uvxkaf q="i'm getting problem in mounting my gmail" → search='How can I resolve issues with mounting my Gmail to Fine Flow?'
+2026-08-28 13:17:31,656 INFO fineflow_nova: session=s_u7uvxkaf q='how will i reach the support team' → search='How can I contact the Fine Flow support team for assistance with mounting my Gma'
+2026-08-28 13:17:56,586 INFO fineflow_nova: session=s_wxuw87wp q='how will i reach the suppoort team' → search='How will I reach the support team for Fine Flow (UK fleet fine management softwa'
+2026-08-28 14:00:27,732 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-08-28 14:00:29,249 INFO fineflow_nova: MySQL connected
+2026-08-28 14:50:11,351 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-08-28 14:50:16,754 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:50:21,767 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:50:26,777 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:50:31,793 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:50:36,805 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:50:41,818 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:50:46,834 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:50:51,846 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:50:56,860 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:51:01,878 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:51:06,909 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:51:11,921 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:51:16,935 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:51:21,949 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:51:26,962 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:51:31,975 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:51:36,985 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:51:41,995 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:51:47,009 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:51:52,020 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:52:49,062 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:52:54,073 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:52:59,085 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:53:04,101 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:53:06,865 INFO fineflow_nova: session=s_bducfnvc q='hi there' → search='hi there'
+2026-08-28 14:53:14,773 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:53:19,791 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:53:24,804 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:53:29,817 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:53:34,832 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:53:39,848 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:53:54,262 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:53:59,273 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:54:04,289 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:54:09,305 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' (timed out)")
+2026-08-28 14:54:11,764 INFO fineflow_nova: session=s_bducfnvc q='u' → search="What information do I need to provide to get assistance with Fine Flow's pricing"
+2026-08-28 14:54:16,509 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' ([WinError 10053] An established connection was aborted by the software in your host machine)")
+2026-08-28 14:54:16,562 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' ([Errno 11001] getaddrinfo failed)")
+2026-08-28 14:54:19,667 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' ([WinError 10053] An established connection was aborted by the software in your host machine)")
+2026-08-28 14:54:19,707 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' ([Errno 11001] getaddrinfo failed)")
+2026-08-28 14:54:19,719 WARNING fineflow_nova: MySQL error (attempt 1): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' ([Errno 11001] getaddrinfo failed)")
+2026-08-28 14:54:19,733 WARNING fineflow_nova: MySQL error (attempt 2): (2003, "Can't connect to MySQL server on 's13509.usc1.stableserver.net' ([Errno 11001] getaddrinfo failed)")

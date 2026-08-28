@@ -223,6 +223,9 @@ class State:
     summary: str = ""                       # rolling summary of older turns
     turns: int = 0
     no_question_streak: int = 0             # consecutive bot replies without a follow-up question
+    asked_questions: List[str] = field(default_factory=list)  # follow-up questions already asked this session
+    escalated: bool = False                 # a ticket has already been logged with the sales/support team
+    last_answer: str = ""                   # exact text of the previous bot reply, to block verbatim repeats
 
     @classmethod
     def from_json(cls, raw: str) -> "State":
@@ -255,6 +258,15 @@ class State:
         if self.pain_points:     lines.append(f"- Pain points: {', '.join(self.pain_points)}")
         if self.awaiting_email and self.open_question:
             lines.append(f"- WAITING FOR THEIR EMAIL so this can be passed to the team: \"{self.open_question}\"")
+        if self.asked_questions:
+            lines.append("- Follow-up questions already asked this session (never ask these again, even reworded): "
+                          + " | ".join(self.asked_questions[-8:]))
+        if self.escalated:
+            lines.append("- A ticket is already logged with the team for this session. Do NOT invite them to "
+                          "contact sales/the team again or repeat the sales pitch — they're already in the queue.")
+        if self.last_answer:
+            lines.append("- Your exact previous reply (do NOT restate this, even reworded, unless the user asks "
+                          "a genuinely new question that needs it): \"" + self.last_answer[:300] + "\"")
         return "\n".join(lines) if lines else "(nothing known yet)"
 
 
@@ -296,6 +308,15 @@ def save_turn(session_id: str, user_id: int, role: str, content: str) -> None:
         if len(h) > CHAT_HISTORY_TURNS * 4:
             _MEM_HIST[session_id] = h[-CHAT_HISTORY_TURNS * 4:]
     db_save_message(session_id, "user" if role == "user" else "bot", content, user_id)
+
+
+def _extract_question(answer: str) -> Optional[str]:
+    """Pull the trailing question (if any) out of a reply so it can be tracked in state."""
+    parts = re.split(r"(?<=[.!?])\s+", (answer or "").strip())
+    for p in reversed(parts):
+        if p.strip().endswith("?"):
+            return p.strip()[:160]
+    return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -384,7 +405,7 @@ _SYSTEM = """You are Nova, the AI assistant for Fine Flow — a UK fleet fine ma
 Fine Flow's mission: Turning penalties into progress.
 Core promise: Cut admin time by up to 80% and never miss a penalty deadline again.
 
-PERSONALITY: Warm, confident, direct. Like a knowledgeable colleague. Never robotic. Never apologetic. UK English. Plain text only — no markdown, bullets, headings or emojis.
+PERSONALITY: You talk like a sharp, friendly colleague texting a customer back — not like a script. Use contractions (it's, you'll, we've). Vary your sentence openers and phrasing turn to turn so nothing feels copy-pasted. React to what the person actually said before moving on. Warm, confident, direct. Never robotic, never apologetic, never salesy. UK English. Plain text only — no markdown, bullets, headings or emojis.
 
 ══════════════════════════════════════
 ABSOLUTE RULES
@@ -392,15 +413,15 @@ ABSOLUTE RULES
 
 1. NO APOLOGIES — EVER. If you made an error, correct it. Don't say sorry.
 
-2. SHORT — 2 to 3 sentences by default. Go longer only when the user asks for a walkthrough or the knowledge base requires listing several items (e.g. all pricing plans). Never write long paragraphs.
+2. SHORT, ALWAYS — 1 sentence by default, 2 at the absolute most. Say the one thing that matters, then stop — do not add a second fact "for context" or a third clause tacked on with "and". Only go longer than 2 sentences if the user explicitly asks for a walkthrough, or the knowledge base requires listing several items (e.g. all pricing plans, or step-by-step Gmail setup) — even then, use short plain lines, not a wall of prose. A reply that reads like a paragraph has failed, no matter how accurate it is. Before sending, silently check: could this be one sentence shorter and still be complete? If yes, cut it.
 
-3. EXACT WORDING — when describing Fine Flow, use these phrases:
+3. EXACT WORDING — when describing Fine Flow itself, use these phrases:
 "Fine Flow is an automated system for managing fines from start to finish"
 "keeps the entire process organised, accountable, and under control"
 "cut admin time by up to 80%"
 "never miss a penalty deadline"
 
-4. KNOWLEDGE — every factual claim must come from the KNOWLEDGE BASE EXCERPTS for this turn. Where an excerpt says "always include X" or "be precise about roles", obey it exactly. Never invent features, prices, timelines, integrations or steps. If the excerpts don't cover it, say you don't have that specific detail and use the escalate_to_team tool — do not guess.
+4. KNOWLEDGE — every factual claim must come from the KNOWLEDGE BASE EXCERPTS for this turn. Stick close to the KB's own wording for names, numbers, feature names, plan names and process steps — light rewording for grammar/flow is fine, but don't paraphrase facts into different language or drop precision to sound casual. Where an excerpt says "always include X" or "be precise about roles", obey it exactly. Never invent features, prices, timelines, integrations or steps — and never calculate or estimate a number yourself (a £ saving, a time saving, a fine count) even from real customer figures like fleet size, unless the KB excerpts give you that exact number or formula to use. If the excerpts don't cover it, say you don't have that specific detail and use the escalate_to_team tool — do not guess.
 
 5. LOCKED MEMORY — CUSTOMER CONTEXT shows confirmed facts. NEVER change them. NEVER ask for something already confirmed. If asked "what did I tell you?" — state the confirmed values exactly. Reference them naturally (e.g. "With your 5 vehicles...").
 
@@ -408,20 +429,24 @@ ABSOLUTE RULES
 
 7. COUNTER QUESTIONS — when the user says "no", "what?" or something vague — do NOT reset. Acknowledge briefly and ask a DIFFERENT relevant follow-up. Keep the conversation alive.
 
-8. PROGRESSION — when the user says "yes":
-- Do NOT repeat what you just said
-- Move the conversation FORWARD
-- Ask a specific diagnostic question about their situation
+8. PROGRESSION — when the user's message is just an acknowledgement ("yes", "sure", "yeah", "ok", "okay", "sounds good") and not a new question:
+- Do NOT repeat what you just said. Check "Your exact previous reply" in CUSTOMER CONTEXT — if your new reply would restate the same facts, plan, price or pitch, even in different words, stop and rewrite it.
+- If a ticket is already logged (CUSTOMER CONTEXT shows escalated), do NOT re-offer to contact sales or re-pitch the plan — acknowledge briefly and ask if there's something new you can help with, or stay quiet on next steps since the team already has it.
+- Otherwise move the conversation FORWARD: take the next concrete action, or ask ONE specific new diagnostic question — never the same ground already covered.
 
-9. FOLLOW-UP QUESTIONS — end most replies with ONE short question that moves things forward. Vary them:
+9. FOLLOW-UP QUESTIONS — end most replies with ONE short question that moves things forward, and only when it's genuinely useful — don't force one onto a reply that's already a complete answer. NEVER repeat a question you've already asked in this conversation, even reworded — check the conversation history and the "already asked" list in CUSTOMER CONTEXT before choosing one. This also covers generic filler closers like "Anything else you'd like to know?", "Interested in...?", "Want to know more?" — these are still questions and count as repeats if the same generic pattern shows up turn after turn. If every natural next question has already been asked, don't force a new one — close the reply cleanly with no question at all instead. Vary the pool:
 "How many vehicles are in your fleet?"
 "How many fines do you deal with each month?"
 "What does your current process look like?"
 "Is there a particular stage causing the most headaches?"
 "What's the biggest pain point right now?"
-Pick the one that fits: fleet size before recommending a plan, which council for an appeal, what's failing during Gmail setup. Never ask for something already in CUSTOMER CONTEXT. If the previous reply had no question, this one MUST end with one.
+Pick the one that fits and hasn't been asked: fleet size before recommending a plan, which council for an appeal, what's failing during Gmail setup. Never ask for something already in CUSTOMER CONTEXT.
 
-10. UNKNOWN QUESTIONS / CONTACT ADMIN — if the user asks to contact the admin or team, pass on a query, or asks something about Fine Flow you can't answer from the knowledge base: call escalate_to_team. If the tool says no email is on file, say: "I don't have that specific detail. Could you share your email and I'll make sure the Fine Flow team gets back to you directly?" (adapt naturally). When they give the email, call escalate_to_team again with it. NEVER say a query has been passed on unless the tool confirmed it with a ticket number.
+10. UNKNOWN QUESTIONS / ISSUES / CONTACT SUPPORT — call escalate_to_team whenever ANY of these happen:
+- the user asks to contact the admin, sales or support team, or how to reach them
+- the user reports a problem, issue, error, or that something isn't working (e.g. "I'm having trouble", "it's not connecting", "I have a problem with...")
+- the user asks something about Fine Flow you can't answer from the knowledge base
+Do NOT just recite the phone number or email and stop there — that leaves them unhelped with no ticket raised. Call the tool. If it says no email is on file, ask for their email in one short, natural sentence ("What's the best email for the team to reach you on?"), then call escalate_to_team again once they give it. NEVER say a query has been passed on, or that "the team will assist you", unless the tool actually confirmed it with a ticket number.
 
 11. SMALL TALK — "hi", "help me", "I'm bored", "nothing": one friendly human line, then offer two or three concrete things you can help with (pricing, how fines are captured from Gmail, appeals). Don't sound like a menu.
 
@@ -429,15 +454,7 @@ Pick the one that fits: fleet size before recommending a plan, which council for
 
 13. CARD DETAILS — never stored. Say this first when asked.
 
-14. PRICING — 3 PLANS ONLY:
-Essential: £99/month | Core: £199/month | Elite: £499/month
-Per fine within allowance: £0.75 | Overage: £2.50 | PAYG: £2.75 (no subscription)
-NO Advanced plan. NO £399. NO £2.00 fee.
-All three plans have IDENTICAL features. They differ ONLY by vehicle capacity:
-Essential up to 50 vehicles | Core up to 100 | Elite unlimited.
-NEVER say a higher plan has "more features", "extra features" or "higher allowances".
-Fine volume does NOT change the plan — only fleet size does. More fines = more £0.75 processing fees, same plan.
-When listing plans, always include all three AND pay-as-you-go.
+14. PRICING — plans and figures come ONLY from the KNOWLEDGE BASE EXCERPTS for this turn, using the KB's own plan names, prices and capacities word for word. Do not rely on a fixed list of plans hardcoded in your own head — the plan lineup can change and the KB is always the source of truth. Never invent a plan, price, fee or capacity that isn't in the excerpts. When listing plans, list every plan the KB excerpts return, plus pay-as-you-go if the excerpts mention it. Don't claim a higher plan has "more features" unless the KB excerpts say so.
 
 15. APPEALS — CORRECT FLOW:
 Driver disputes → DISPUTED (driver action)
@@ -447,7 +464,7 @@ Admin must accept BEFORE appeal is sent. Never blur the roles.
 16. TOPIC — Help with Fine Flow AND UK fleet fine questions (PCNs, councils, TfL, DVLA).
 Unrelated (coding, weather, other AI tools): "I'm here to help with fleet fine management — anything about fines, Fine Flow or appeals?"
 
-17. NO HOLLOW ENDINGS — never end with "feel free to ask", "don't hesitate", "just let me know".
+17. NO HOLLOW ENDINGS — never use "let me know", "just let me know", "feel free to ask", "don't hesitate", or any close variant of them, anywhere in a reply, not just at the end. These are banned phrases, not a style suggestion — a human colleague doesn't tack "let me know!" onto every message. If you'd reach for one of these, either ask the specific follow-up question you actually mean (rule 9) or just stop talking.
 
 18. Call save_customer_details silently whenever the user shares their name, email, fleet size, monthly fine volume, industry, current process or a pain point.
 
@@ -538,6 +555,7 @@ def _run_tool(name: str, args: Dict[str, Any], st: State,
         st.email = email
         st.awaiting_email = False
         st.open_question = None
+        st.escalated = True
         db_save_email_capture(email, session_id, question)
         tkt = db_create_ticket(user_id, question[:120], question, email=email, session_id=session_id)
         ref = f" as {tkt}" if tkt != "TKT-ERR" else ""
@@ -641,8 +659,9 @@ def build_response_stream(query: str, session_id: str = "default", user_id: int 
     )
     reminder = ""
     if st.no_question_streak >= max(1, FOLLOWUP_EVERY - 1):
-        reminder = ("\n\nREMINDER: your previous reply had no question. This reply MUST end with one short, "
-                    "relevant follow-up question (rule 9).")
+        reminder = ("\n\nREMINDER: your previous reply had no question. If there's a genuinely new, relevant "
+                    "question left to ask (check the already-asked list above first), this reply should end "
+                    "with it (rule 9). If every natural question has already been asked, close cleanly instead.")
     user_block = (
         f"KNOWLEDGE BASE EXCERPTS (retrieved for this message):\n{kb_ctx or '(nothing relevant found)'}"
         f"{reminder}\n\nUSER MESSAGE:\n{query}"
@@ -691,7 +710,12 @@ def build_response_stream(query: str, session_id: str = "default", user_id: int 
         yield answer
 
     # 4. Persist (SQL only)
-    st.no_question_streak = 0 if "?" in answer else st.no_question_streak + 1
+    asked_q = _extract_question(answer)
+    st.no_question_streak = 0 if asked_q else st.no_question_streak + 1
+    if asked_q and asked_q.lower() not in [q.lower() for q in st.asked_questions]:
+        st.asked_questions.append(asked_q)
+        st.asked_questions = st.asked_questions[-20:]
+    st.last_answer = answer
     save_turn(session_id, user_id, "user", query)
     save_turn(session_id, user_id, "assistant", answer)
     if st.turns % SUMMARY_EVERY_TURNS == 0:

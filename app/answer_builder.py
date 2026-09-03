@@ -12,6 +12,15 @@ FineFlow Nova — LLM-first conversation engine (streaming, tools, SQL memory)
 • Memory is SQL only: chat_history (turns) + session_state (profile/summary). Chroma holds the KB only.
 • Streaming: build_response_stream() yields text chunks then a final dict; build_response() wraps it.
 
+v3.6 changes (client KB v2 alignment):
+  11. Pricing aligned to the client's MASTER KB v2: FOUR plans - Essential £99 (5-50),
+      Core £199 (51-100), Advanced £399 (101-200), Elite £499 (200+) - plus PAYG £2.75.
+      Advanced/£399 are now VALID; only the £2.00 fee remains blocked. State.plan()
+      thresholds updated. Savings figures £400/£1,200/£4,000 (KB ROI topic) allowed;
+      any other £ figure still fails grounding.
+  12. Tone exemplars from the client's sample Q&A added to the prompt (voice only -
+      the sample file is NOT a knowledge store; the single KB remains the only source).
+
 v3.5 changes:
   10. _hard_guard(): final deterministic output gate. If, even after corrective
       regeneration, the answer still contains the Advanced plan / £399 / £2.00 or a
@@ -280,6 +289,8 @@ class State:
             return "Essential (£99/month)"
         if self.fleet_size <= 100:
             return "Core (£199/month)"
+        if self.fleet_size <= 200:
+            return "Advanced (£399/month)"
         return "Elite (£499/month)"
 
     def context_block(self) -> str:
@@ -440,6 +451,14 @@ _SYSTEM = """You are Nova, the AI assistant for Fine Flow — a UK fleet fine ma
 Fine Flow's mission: Turning penalties into progress.
 Core promise: Cut admin time by up to 80% and never miss a penalty deadline again.
 
+VOICE - write exactly like the client's own sample answers. Their voice: confident, plain, concrete, slightly conversational, zero fluff. Study these patterns and match them:
+- Direct verdict first, reason second: "No - and that's intentional." / "Driver logs are not required."
+- Reassurance through concreteness: "nothing gets missed, nothing gets buried in email" / "it's flagged for review - nothing breaks and nothing gets missed."
+- Plain mechanics, no hype: "It compares each fine against your uploaded logs - checking the vehicle, date, and time."
+- Grounded honesty over salesmanship: "every council reviews appeals differently, so there's no guaranteed result."
+- Offer-style follow-ups: "Want a breakdown of how it all works?" / "Want me to walk you through how assignment works?"
+Where the knowledge base excerpt already contains a well-formed sentence for the fact you need, use that sentence as-is or near-verbatim - the client wrote it deliberately.
+
 PERSONALITY: You talk like a sharp, friendly colleague texting a customer back — not like a script. Use contractions (it's, you'll, we've). Vary your sentence openers and phrasing turn to turn so nothing feels copy-pasted. React to what the person actually said before moving on. Warm, confident, direct. Never robotic, never apologetic, never salesy. UK English. Plain text only — no markdown, bullets, headings or emojis.
 
 ══════════════════════════════════════
@@ -448,9 +467,9 @@ ABSOLUTE RULES
 
 1. NO APOLOGIES — EVER. If you made an error, correct it. Don't say sorry.
 
-2. SHORT, ALWAYS — 1 sentence by default, 2 at the absolute most. Say the one thing that matters, then stop — do not add a second fact "for context" or a third clause tacked on with "and". Only go longer than 2 sentences if the user explicitly asks for a walkthrough, or the knowledge base requires listing several items (e.g. all pricing plans, or step-by-step Gmail setup) — even then, use short plain lines, not a wall of prose. A reply that reads like a paragraph has failed, no matter how accurate it is. Before sending, silently check: could this be one sentence shorter and still be complete? If yes, cut it.
+2. LENGTH - match the client's sample answers: 2 to 4 sentences for a real question, structured like theirs - the direct answer first, then the concrete mechanics, then (when useful) one offer-style follow-up. One sentence is fine for simple confirmations. Never exceed 5 sentences and never write a wall of prose; if a topic genuinely needs more (full pricing list, step-by-step setup), use short plain lines. Before sending, check: does every sentence add a new fact or move the conversation? Cut any that don't.
 
-2a. EXPLAIN / DETAIL / FULL STEPS REQUESTS — when the user asks to "explain", "explain in detail", "full steps", "walk me through", or similar: give a COMPLETE but CONDENSED summary, not exhaustive detail. Cover every step that exists, but in one short clause per step (not a paragraph per step) — e.g. "1. Email ingestion — Gmail is monitored automatically. 2. Data extraction — AI pulls the fine details. 3. Driver assignment — matched by vehicle and time." Never leave a step unlisted just to add more words to an earlier one. Before finishing, mentally check you've reached the last step and closed the sentence — an answer that stops mid-step or mid-list is worse than a shorter complete one. If the full explanation genuinely cannot fit in a short summary, say so and offer to break it into parts ("Want stage 1 first, or the full list in brief?") rather than starting a detailed answer you can't finish.
+2a. EXPLAIN / DETAIL / FULL STEPS REQUESTS - when the user asks to "explain", "explain in detail", "full steps", "walk me through", or similar: give a COMPLETE but CONDENSED summary, not exhaustive detail. Cover every step that exists, but in one short clause per step - e.g. "1. Email ingestion - Gmail is monitored automatically. 2. Data extraction - AI pulls the fine details. 3. Driver assignment - matched by vehicle and time." Never leave a step unlisted just to add more words to an earlier one. Before finishing, mentally check you've reached the last step and closed the sentence - an answer that stops mid-step or mid-list is worse than a shorter complete one. If the full explanation genuinely cannot fit, offer to break it into parts rather than starting an answer you can't finish. When the request is for full detail on how Fine Flow works overall, NEVER re-serve the overview you already gave - walk the six lifecycle stages instead, one short clause each: email ingestion, data extraction, driver assignment, driver action (confirm/dispute), appeal review, outcome tracking.
 
 3. EXACT WORDING — when describing Fine Flow itself, use these phrases:
 "Fine Flow is an automated system for managing fines from start to finish"
@@ -460,24 +479,18 @@ ABSOLUTE RULES
 
 4. KNOWLEDGE — every factual claim must come from the KNOWLEDGE BASE EXCERPTS for this turn. Stick close to the KB's own wording for names, numbers, feature names, plan names and process steps — light rewording for grammar/flow is fine, but don't paraphrase facts into different language or drop precision to sound casual. Where an excerpt says "always include X" or "be precise about roles", obey it exactly. Never invent features, prices, timelines, integrations or steps — and never calculate or estimate a number yourself (a £ saving, a time saving, a fine count) even from real customer figures like fleet size, unless the KB excerpts give you that exact number or formula to use. If the excerpts don't cover it, say you don't have that specific detail and use the escalate_to_team tool — do not guess.
 
-5. LOCKED MEMORY — CUSTOMER CONTEXT shows confirmed facts. NEVER change them. NEVER ask for something already confirmed. If asked "what did I tell you?" — state the confirmed values exactly. Reference them naturally (e.g. "With your 5 vehicles...").
+5. LOCKED MEMORY — CUSTOMER CONTEXT shows confirmed facts. NEVER change them. NEVER ask for something already confirmed. If asked "what did I tell you?" or "what do you know about us" — state EVERY confirmed value exactly (fleet size, fines per month, name, email, industry, pain points), not a subset. Weave them into answers naturally the way a colleague who knows the account would - "With your 8 vehicles you'd be on Essential", "Given the 40-odd fines you handle a month..." - at most one such reference per reply, only where it genuinely sharpens the answer. Never recite the whole profile unprompted; never ask for anything already listed.
 
 6. CONTINUITY — read the conversation before replying. When the user answers a question you asked, treat their reply as that answer even if it's one word ("yes", "london", "5", "gmail"). A bare number ("8", "40ish", "around 60") is ALWAYS the answer to the most recent unanswered question YOU asked — if you asked fleet size two messages ago and they now send "8", that's 8 vehicles, even if other topics came in between. Save it with save_customer_details against the right field, and never reassign it to a different field later. Never restart the conversation or fall back to a generic menu mid-thread.
 
 7. COUNTER QUESTIONS — when the user says "no", "what?" or something vague — do NOT reset. Acknowledge briefly and ask a DIFFERENT relevant follow-up. Keep the conversation alive. "No" in reply to a question you asked means they're declining that thread — DROP it completely and pivot to a different useful topic; re-asking the same question after a "no" is a failure. If they say "yes"/"ok" without actually giving the detail you asked for, do not re-ask the identical question: either ask for the specific missing piece in clearly different words with an example ("Which council was it — Lambeth, TfL...?"), or move on to something else you can help with. The same question NEVER appears twice in a conversation, word for word or reworded.
 
-8. PROGRESSION — when the user's message is just an acknowledgement ("yes", "sure", "yeah", "ok", "okay", "sounds good") and not a new question:
+8. PROGRESSION — when the user's message is just an acknowledgement ("yes", "sure", "yeah", "ok", "okay", "sounds good") or a string of them ("ok yes hmm right", "hmm ok") and not a new question — NEVER answer these with the product overview or any pitch:
 - Do NOT repeat what you just said. Check "Your exact previous reply" in CUSTOMER CONTEXT — if your new reply would restate the same facts, plan, price or pitch, even in different words, stop and rewrite it.
 - If a ticket is already logged (CUSTOMER CONTEXT shows escalated), do NOT re-offer to contact sales or re-pitch the plan — acknowledge briefly and ask if there's something new you can help with, or stay quiet on next steps since the team already has it.
 - Otherwise move the conversation FORWARD: take the next concrete action, or ask ONE specific new diagnostic question — never the same ground already covered.
 
-9. FOLLOW-UP QUESTIONS — end most replies with ONE short question that moves things forward, and only when it's genuinely useful — don't force one onto a reply that's already a complete answer. NEVER repeat a question you've already asked in this conversation, even reworded — check the conversation history and the "already asked" list in CUSTOMER CONTEXT before choosing one. This also covers generic filler closers like "Anything else you'd like to know?", "Interested in...?", "Want to know more?" — these are still questions and count as repeats if the same generic pattern shows up turn after turn. If every natural next question has already been asked, don't force a new one — close the reply cleanly with no question at all instead. Vary the pool:
-"How many vehicles are in your fleet?"
-"How many fines do you deal with each month?"
-"What does your current process look like?"
-"Is there a particular stage causing the most headaches?"
-"What's the biggest pain point right now?"
-Pick the one that fits and hasn't been asked: fleet size before recommending a plan, which council for an appeal, what's failing during Gmail setup. Never ask for something already in CUSTOMER CONTEXT.
+9. FOLLOW-UP QUESTIONS - informational answers about how Fine Flow works SHOULD end with ONE short offer-style follow-up, exactly like the client's samples: "Want a breakdown of how it all works?", "Want me to walk you through how assignment works?", "Tell me what you're seeing and I can help you prioritise." This is the default, not the exception - skip it only when the previous reply also ended with a question the user hasn't answered yet, or the user asked a closed factual question that's now fully settled. NEVER repeat a question you've already asked this conversation, even reworded - check the history and the "already asked" list in CUSTOMER CONTEXT first. Generic filler closers ("Anything else?", "Want to know more?") count as repeats when the same pattern recurs. Sales-diagnostic questions to rotate when they fit and haven't been asked: fleet size, fines per month, current process, biggest pain point, which stage causes most admin. Never ask for something already in CUSTOMER CONTEXT. If every natural question is used up, close cleanly with no question.
 
 10. UNKNOWN QUESTIONS / ISSUES / CONTACT SUPPORT — call escalate_to_team whenever ANY of these happen:
 - the user asks to contact the admin, sales or support team, or how to reach them
@@ -491,12 +504,12 @@ Do NOT just recite the phone number or email and stop there — that leaves them
 
 13. CARD DETAILS — never stored. Say this first when asked.
 
-14. PRICING — LOCKED, client-confirmed. These figures override everything, including the knowledge base:
-Essential £99/month (up to 50 vehicles) | Core £199/month (51-100) | Elite £499/month (100+, unlimited).
-Per fine within allowance £0.75 | overage £2.50 | Pay-as-you-go £2.75 per fine, no subscription.
-There are exactly THREE plans plus pay-as-you-go. There is NO Advanced plan, NO £399 price, NO £2.00 fee — if a knowledge base excerpt mentions any of these, that excerpt is outdated and must be ignored; if the user asks whether an Advanced plan exists, say no and give the three real plans. All plans have identical features; fleet size alone decides the plan. Never invent a plan, price, fee or capacity beyond this list.
+14. PRICING - LOCKED to the client's knowledge base. These figures are final:
+Essential £99/month (5-50 vehicles) | Core £199/month (51-100) | Advanced £399/month (101-200) | Elite £499/month (200+).
+Per fine within allowance £0.75 | overage £2.50 | Pay-as-you-go £2.75 per fine, no subscription, zero lock-in.
+There are exactly FOUR subscription plans plus PAYG. When listing plans, ALWAYS include all four tiers AND mention PAYG as an alternative - never omit Advanced or PAYG. Every plan includes identical features - no locked features, no paywalls. There is NO £2.00 fee anywhere in Fine Flow. Never invent a plan, price, fee or capacity beyond this list.
 
-14a. SAVINGS CLAIMS — never state a £ amount that Fine Flow saves, not even if a knowledge base excerpt suggests one. The ONLY savings claim permitted is "cut admin time by up to 80%". Money saved depends on their fines and process — you don't know it, so don't invent it.
+14a. SAVINGS CLAIMS - only the knowledge base's own figures, tied to the right fleet size: small fleet (up to 50 vehicles) over £400/month, medium (51-200) over £1,200/month, large (200+) over £4,000/month, alongside "cut admin time by up to 80%". Never state any other £ savings amount and never calculate one yourself.
 
 14b. SALES FLOW — pricing is a conversation, not a price list. When the user asks about pricing, plans, cost or "which plan":
 - If fleet size is NOT in CUSTOMER CONTEXT: answer from the KB, then END the reply by asking how many vehicles are in their fleet. This question is mandatory here even if a follow-up wouldn't otherwise be needed.
@@ -626,7 +639,10 @@ def _standalone_query(query: str, history: List[Dict], st: State) -> str:
         {"role": "system", "content":
             "Rewrite the user's latest message as one self-contained search query for a Fine Flow "
             "(UK fleet fine management software) knowledge base, using the conversation for context. "
-            "Keep the user's intent; expand pronouns and one-word replies. Output ONLY the query."},
+            "Keep the user's intent; expand pronouns and one-word replies. Match the LITERAL question "
+            "being asked now - do not drift to the previous turn's topic. If they ask for more/full "
+            "detail on how Fine Flow works, target: fine lifecycle stages ingestion extraction "
+            "assignment dispute appeal outcome. Output ONLY the query."},
         {"role": "user", "content":
             f"Summary so far: {st.summary or '(none)'}\n\nConversation:\n{convo}\n\nLatest user message: {query}"},
     ]
@@ -694,7 +710,7 @@ def _clean(text: str) -> str:
 # v3.2: locked-fact tripwire. These figures were removed from the KB by client
 # decision (§3 of the handoff report). If they appear in an answer, the deployed
 # KB is stale — fix the KB file and re-embed (rm -rf data/chroma_db + restart).
-_LOCKED_VIOLATION = re.compile(r"£399|£2\.00\b|\bAdvanced\b[^.]{0,40}(plan|£)", re.I)
+_LOCKED_VIOLATION = re.compile(r"£2\.00\b")
 
 
 _MONEY_RE = re.compile(r"£\s?([\d,]+(?:\.\d+)?)")
@@ -707,11 +723,21 @@ def _norm_cmp(t: str) -> str:
 def _find_violations(answer: str, st: "State", kb_ctx: str) -> List[str]:
     """Deterministic checks the model keeps failing despite prompt rules."""
     v: List[str] = []
-    # (a) whole-reply repeat of the previous reply
-    if st.last_answer and _norm_cmp(answer) == _norm_cmp(st.last_answer):
-        v.append("Your reply is identical to your previous reply. Say something different: "
-                 "acknowledge their last message and either rephrase your question with a concrete "
-                 "example or pivot to a different useful topic.")
+    # (a) whole-reply repeat of the previous reply (exact OR near-verbatim)
+    import difflib
+    if st.last_answer and (
+            _norm_cmp(answer) == _norm_cmp(st.last_answer)
+            or difflib.SequenceMatcher(None, _norm_cmp(answer),
+                                       _norm_cmp(st.last_answer)).ratio() >= 0.9):
+        v.append("Your reply is (near-)identical to your previous reply. Say something NEW: "
+                 "if they asked for more detail, go one level deeper (e.g. the six lifecycle "
+                 "stages, one clause each); otherwise pivot to a different useful angle or "
+                 "question. Do not restate the same sentences.")
+    # (a2) hollow filler phrase survived cleaning (single-sentence filler replies)
+    if _HOLLOW_PAT.search(answer):
+        v.append("Your reply contains a banned filler phrase ('let me know' / 'feel free to ask' "
+                 "or similar, rule 17). Replace the reply with something real: either one fresh, "
+                 "specific follow-up question not yet asked, or a clean close with no question.")
     # (b) re-asked question
     q = _extract_question(answer)
     if q:
@@ -722,19 +748,14 @@ def _find_violations(answer: str, st: "State", kb_ctx: str) -> List[str]:
                          "Never repeat a question. Either ask for the missing detail in clearly "
                          "different words with an example, or drop the thread and pivot.")
                 break
-    # (c0) locked-pricing violations — these regenerate even when the stale KB "grounds" them
-    if re.search(r"£399|£2\.00\b", answer) or re.search(r"\bAdvanced\b[^.]{0,50}(plan|£|\d)", answer, re.I):
-        v.append("You mentioned the Advanced plan / £399 / £2.00. These do NOT exist — the KB excerpt "
-                 "containing them is outdated (rule 14). There are exactly three plans: Essential £99, "
-                 "Core £199, Elite £499, plus pay-as-you-go £2.75. Rewrite using only these.")
-    # (c1) £ savings claims — banned outright (rule 14a)
-    if re.search(r"\bsav(e|es|ed|ing)\b[^.£]{0,60}£\s?[\d,]+", answer, re.I):
-        v.append("You stated a £ savings amount. Never do this (rule 14a) — the only savings claim "
-                 "allowed is 'cut admin time by up to 80%'. Remove the £ figure.")
+    # (c0) the only forbidden fee - £2.00 does not exist anywhere in Fine Flow
+    if re.search(r"£2\.00\b", answer):
+        v.append("You mentioned a £2.00 fee. There is NO £2.00 fee anywhere in Fine Flow (rule 14). "
+                 "The real figures are £0.75 within allowance, £2.50 overage, £2.75 PAYG.")
     # (c) invented £ amounts (savings/prices not grounded in KB or customer context)
     allowed = set(m.replace(",", "") for m in _MONEY_RE.findall(
-        (kb_ctx or "") + " " + st.context_block() + " 99 199 499 0.75 2.50 2.75"))
-    allowed.discard("399"); allowed.discard("2.00")  # stale-KB figures are never allowed
+        (kb_ctx or "") + " " + st.context_block() + " 99 199 399 499 0.75 2.50 2.75 400 1200 1,200 4000 4,000 75"))
+    allowed.discard("2.00")  # the one fee that does not exist
     for amt in _MONEY_RE.findall(answer):
         if amt.replace(",", "") not in allowed:
             v.append(f"£{amt} does not appear in the knowledge base excerpts — you invented or "
@@ -755,26 +776,16 @@ def _regenerate(msgs: List[Dict], draft: str, violations: List[str]) -> Optional
     return _openai(fix_msgs, OPENAI_MODEL, LLM_MAX_TOKENS, 0.3)
 
 
-_LOCKED_PLANS_LINE = ("Fine Flow has three plans - Essential at £99/month (up to 50 vehicles), "
-                      "Core at £199/month (51-100) and Elite at £499/month (100+), plus "
-                      "pay-as-you-go at £2.75 per fine with no subscription.")
-_SAVINGS_LINE = "Fine Flow cuts admin time by up to 80% and makes sure you never miss a penalty deadline."
-
-
 def _hard_guard(answer: str, st: "State") -> str:
-    """Last-resort deterministic gate. Runs after the verifier/regeneration; guarantees
-    that stale-KB pricing and invented £-savings can never reach the user."""
+    """Last-resort deterministic gate: the £2.00 fee does not exist and can never
+    reach the user. Everything else is handled by the verifier + regeneration."""
     out = answer
-    if re.search(r"£399|£2\.00\b", out) or re.search(r"\bAdvanced\b[^.]{0,50}(plan|£|\d)", out, re.I):
-        logger.error("HARD-GUARD pricing rewrite fired; original=%r", out[:200])
-        tail = "" if st.fleet_size else " How many vehicles are in your fleet?"
-        out = _LOCKED_PLANS_LINE + tail
-    if re.search(r"\bsav(e|es|ed|ing)\b[^.£]{0,60}£\s?[\d,]+", out, re.I):
-        logger.error("HARD-GUARD savings rewrite fired; original=%r", out[:200])
+    if re.search(r"£2\.00\b", out):
+        logger.error("HARD-GUARD £2.00 rewrite fired; original=%r", out[:200])
         sentences = re.split(r"(?<=[.!?])\s+", out)
-        kept = [s for s in sentences
-                if not re.search(r"\bsav(e|es|ed|ing)\b[^.£]{0,60}£\s?[\d,]+", s, re.I)]
-        out = " ".join(kept).strip() or _SAVINGS_LINE
+        kept = [s for s in sentences if "£2.00" not in s]
+        out = " ".join(kept).strip() or ("Fines are £0.75 each within your allowance, £2.50 "
+                                          "per fine beyond it, and £2.75 on pay-as-you-go.")
     return out
 
 
@@ -887,9 +898,8 @@ def build_response_stream(query: str, session_id: str = "default", user_id: int 
 
     # v3.2 tripwire: removed plans/prices appearing in an answer = stale KB deployed.
     if _LOCKED_VIOLATION.search(answer):
-        logger.error("LOCKED-FACT VIOLATION session=%s answer=%r — the deployed KB still contains "
-                     "removed pricing (Advanced/£399/£2.00). Fix the KB file and re-embed "
-                     "(rm -rf data/chroma_db, restart).", session_id, answer[:200])
+        logger.error("LOCKED-FACT VIOLATION session=%s answer=%r — £2.00 fee mentioned; "
+                     "this fee does not exist.", session_id, answer[:200])
 
     # 4. Persist (SQL only)
     asked_q = _extract_question(answer)

@@ -319,6 +319,7 @@ class State:
     asked_questions: List[str] = field(default_factory=list)  # follow-up questions already asked this session
     escalated: bool = False                 # a ticket has already been logged with the sales/support team
     last_answer: str = ""                   # exact text of the previous bot reply, to block verbatim repeats
+    last_question: str = ""                 # the trailing question/offer of the previous reply
 
     @classmethod
     def from_json(cls, raw: str) -> "State":
@@ -359,6 +360,10 @@ class State:
         if self.escalated:
             lines.append("- A ticket is already logged with the team for this session. Do NOT invite them to "
                           "contact sales/the team again or repeat the sales pitch — they're already in the queue.")
+        if self.last_question:
+            lines.append("- Your last question/offer to the user was: \"" + self.last_question[:160] + "\" "
+                          "If their latest message is an acceptance (yes / sure / ok / yeah), DELIVER exactly "
+                          "what that offer promised - do not repeat earlier content and do not pivot to sales.")
         if self.last_answer:
             lines.append("- Your exact previous reply (do NOT restate this, even reworded, unless the user asks "
                           "a genuinely new question that needs it): \"" + self.last_answer[:300] + "\"")
@@ -557,6 +562,7 @@ ABSOLUTE RULES
 - Do NOT repeat what you just said. Check "Your exact previous reply" in CUSTOMER CONTEXT — if your new reply would restate the same facts, plan, price or pitch, even in different words, stop and rewrite it.
 - If a ticket is already logged (CUSTOMER CONTEXT shows escalated), do NOT re-offer to contact sales or re-pitch the plan — acknowledge briefly and ask if there's something new you can help with, or stay quiet on next steps since the team already has it.
 - Otherwise move the conversation FORWARD: take the next concrete action, or ask ONE specific new diagnostic question — never the same ground already covered.
+- Once a ticket exists, acknowledgements get ONE warm line at most ("The team has it and will reach you at your email") - never the product overview, never a pitch, never an empty "Great!".
 
 9. FOLLOW-UP QUESTIONS - informational answers about how Fine Flow works SHOULD end with ONE short offer-style follow-up, exactly like the client's samples: "Want a breakdown of how it all works?", "Want me to walk you through how assignment works?", "Tell me what you're seeing and I can help you prioritise." This is the default, not the exception - skip it only when the previous reply also ended with a question the user hasn't answered yet, or the user asked a closed factual question that's now fully settled. NEVER repeat a question you've already asked this conversation, even reworded - check the history and the "already asked" list in CUSTOMER CONTEXT first. Generic filler closers ("Anything else?", "Want to know more?") count as repeats when the same pattern recurs. Sales-diagnostic questions to rotate when they fit and haven't been asked: fleet size, fines per month, current process, biggest pain point, which stage causes most admin. Never ask for something already in CUSTOMER CONTEXT. If every natural question is used up, close cleanly with no question.
 
@@ -565,6 +571,8 @@ ABSOLUTE RULES
 - the user reports a problem, issue, error, or that something isn't working (e.g. "I'm having trouble", "it's not connecting", "I have a problem with...")
 - the user asks something about Fine Flow you can't answer from the knowledge base
 Do NOT just recite the phone number or email and stop there — that leaves them unhelped with no ticket raised. Reciting the contact details INSTEAD of calling escalate_to_team is a failure, every time — the tool is how the team actually finds out. Call the tool. If it says no email is on file, ask for their email in one short, natural sentence ("What's the best email for the team to reach you on?"), then call escalate_to_team again once they give it. NEVER say a query has been passed on, or that "the team will assist you", unless the tool actually confirmed it with a ticket number.
+
+10a. TEAM RESPONSE TIME - if asked how long the team/support/sales will take to reply to a ticket or email, the knowledge base has NO support SLA: say the team will be in touch as soon as possible at their email, and do not invent a timeframe. NEVER answer this with the inbox-monitoring speed ("checked every minute") - that describes fine ingestion, not support replies.
 
 11. SMALL TALK — "hi", "help me", "I'm bored", "nothing": one friendly human line, then offer two or three concrete things you can help with (pricing, how fines are captured from Gmail, appeals). Don't sound like a menu.
 
@@ -748,7 +756,7 @@ _HOLLOW_PAT = re.compile(
     r"(just\s+let\s+me\s+know|let\s+me\s+know\b|feel\s+free\s+to\s+ask|"
     r"don'?t\s+hesitate|happy\s+to\s+help|here\s+to\s+help\s+with\s+anything|"
     r"any\s+other\s+questions|if\s+you\s+need\s+(any\s+)?(more\s+|further\s+)?"
-    r"(help|details|information|assistance))", re.I)
+    r"(help|details|information|assistance)|just\s+ask\b|i'?m\s+here\s+to\s+help\b|i'?m\s+here\s+for\s+you)", re.I)
 _SUBSTANCE_PAT = re.compile(r"[\d£?]|which|what|when|where|how\s+many|go\s+to|click|settings", re.I)
 
 
@@ -788,7 +796,7 @@ def _norm_cmp(t: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^\w\s?]", "", (t or "").lower())).strip()
 
 
-def _find_violations(answer: str, st: "State", kb_ctx: str) -> List[str]:
+def _find_violations(answer: str, st: "State", kb_ctx: str, query: str = "") -> List[str]:
     """Deterministic checks the model keeps failing despite prompt rules."""
     v: List[str] = []
     # (a) whole-reply repeat of the previous reply (exact OR near-verbatim)
@@ -801,11 +809,31 @@ def _find_violations(answer: str, st: "State", kb_ctx: str) -> List[str]:
                  "if they asked for more detail, go one level deeper (e.g. the six lifecycle "
                  "stages, one clause each); otherwise pivot to a different useful angle or "
                  "question. Do not restate the same sentences.")
-    # (a2) hollow filler phrase survived cleaning (single-sentence filler replies)
-    if _HOLLOW_PAT.search(answer):
+    # (a2) hollow filler phrase survived cleaning (single-sentence filler replies).
+    # Substance (a ?, digits, specifics) exempts required lines like the off-topic redirect.
+    if _HOLLOW_PAT.search(answer) and not _SUBSTANCE_PAT.search(answer):
         v.append("Your reply contains a banned filler phrase ('let me know' / 'feel free to ask' "
                  "or similar, rule 17). Replace the reply with something real: either one fresh, "
                  "specific follow-up question not yet asked, or a clean close with no question.")
+    # (a3) empty filler reply ("Great!", "I'm here to help!") - no fact, no question
+    _FAREWELL = re.compile(r"\b(bye|goodbye|thanks?|thank you|cheers|take care)\b", re.I)
+    if (len(answer) < 35 and "?" not in answer
+            and not any(ch.isdigit() for ch in answer)
+            and not _FAREWELL.search(query or "")):
+        v.append("Your reply is empty filler with no information and no question. Either give one "
+                 "concrete next piece of information, ask one fresh question not yet asked, or - if a "
+                 "ticket is logged - one warm line confirming the team has it.")
+    # (a4) contact request answered by reciting the phone number instead of collecting an email
+    if (query and re.search(r"\b(contact|reach|talk to|speak to|connect me)\b", query, re.I)
+            and re.search(r"\b(team|support|sales|someone|human|staff)\b", query, re.I)
+            and "+47" in answer and not st.escalated):
+        v.append("The user asked to contact the team. Do NOT recite the phone number (rule 10) - "
+                 "ask for their email in one short natural sentence so the team can follow up.")
+    # (a5) marketing pitch as a reply to an acknowledgement after a ticket exists
+    if (query and len(query.split()) <= 3 and st.escalated
+            and "automated system for managing fines" in answer):
+        v.append("A ticket is already logged and the user only acknowledged. Do not re-pitch the "
+                 "product overview - acknowledge briefly, confirm the team has it, or ask one NEW question.")
     # (b) re-asked question
     q = _extract_question(answer)
     if q:
@@ -822,7 +850,7 @@ def _find_violations(answer: str, st: "State", kb_ctx: str) -> List[str]:
                  "The real figures are £0.75 within allowance, £2.50 overage, £2.75 PAYG.")
     # (c) invented £ amounts (savings/prices not grounded in KB or customer context)
     allowed = set(m.replace(",", "") for m in _MONEY_RE.findall(
-        (kb_ctx or "") + " " + st.context_block() + " 99 199 399 499 0.75 2.50 2.75 400 1200 1,200 4000 4,000 75"))
+        (kb_ctx or "") + " " + st.context_block() + " £99 £199 £399 £499 £0.75 £2.50 £2.75 £400 £1200 £1,200 £4000 £4,000 £75"))
     allowed.discard("2.00")  # the one fee that does not exist
     for amt in _MONEY_RE.findall(answer):
         if amt.replace(",", "") not in allowed:
@@ -986,13 +1014,13 @@ def build_response_stream(query: str, session_id: str = "default", user_id: int 
         yield answer
 
     # v3.3: deterministic verifier — repetition and invented £ figures get one corrective pass.
-    violations = _find_violations(answer, st, kb_ctx)
+    violations = _find_violations(answer, st, kb_ctx, query)
     if violations and answer not in (_OUTAGE,):
         logger.warning("VERIFIER session=%s violations=%s", session_id, violations)
         fixed = _regenerate(msgs, answer, violations)
         if fixed:
             fixed = _clean(fixed)
-            if fixed and not _find_violations(fixed, st, kb_ctx):
+            if fixed and not _find_violations(fixed, st, kb_ctx, query):
                 answer = fixed
             elif fixed:
                 answer = fixed  # still better than a verbatim repeat; violations logged above
@@ -1021,6 +1049,7 @@ def build_response_stream(query: str, session_id: str = "default", user_id: int 
         st.asked_questions.append(asked_q)
         st.asked_questions = st.asked_questions[-20:]
     st.last_answer = answer
+    st.last_question = asked_q or ""
     # v3.9: request_email is PER-TURN - true only when THIS reply asks for the email.
     # st.awaiting_email stays set internally so a typed email still escalates, but the
     # form no longer re-appears (and status no longer logs 1) on every later message.

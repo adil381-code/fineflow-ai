@@ -2194,3 +2194,5 @@ requests.exceptions.HTTPError: 429 Client Error: Too Many Requests for url: http
 2026-09-04 15:09:30,368 INFO fineflow_nova: session=session_1788516150056_37nwd8j7s q='test connection' → retrieval skipped
 2026-09-04 15:55:08,991 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
 2026-09-04 15:55:10,551 INFO fineflow_nova: MySQL connected
+2026-09-07 14:56:43,533 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-09-07 14:56:45,198 INFO fineflow_nova: MySQL connected

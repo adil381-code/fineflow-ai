@@ -31,10 +31,17 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+try:
+    import jwt as pyjwt          # PyJWT - pip install PyJWT
+except Exception:                # keep the API bootable without it; token auth just disabled
+    pyjwt = None
+
+
 from app.answer_builder import (
     answer_sync, build_response_stream, db, db_all_tickets, db_create_ticket,
     db_find_or_create_user, db_load_history, db_migrate_guest, db_save_email_capture,
-    db_user_chat_all_sessions, db_user_has_ticket, ensure_tables, mark_email_ticket,
+    db_user_chat_all_sessions, db_user_has_ticket, db_user_sessions, ensure_tables,
+    mark_email_ticket,
 )
 from app.config import ADMIN_TOKEN, CORS_ORIGINS, RATE_LIMIT_PER_MIN
 from app.logger import logger
@@ -144,27 +151,64 @@ def _guard(message: str, sid: str):
         raise HTTPException(429, "Too many messages — slow down a little.")
 
 
+JWT_SECRET = os.getenv("JWT_SECRET", "")   # SAME secret as the FineFlow site backend
+
+
+def _user_from_token(authorization: Optional[str]) -> int:
+    """Verify a FineFlow JWT (shared secret, HS256) and return our chatbot user_id.
+    Verification = signature check only - no call to the site's database.
+    Bad/missing token -> 0 (guest). Never blocks the chat."""
+    if not authorization or not JWT_SECRET or pyjwt is None:
+        return 0
+    token = authorization.replace("Bearer ", "").strip()
+    if not token:
+        return 0
+    try:
+        claims = pyjwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+    except Exception:
+        logger.warning("JWT verification failed")
+        return 0
+    email = (claims.get("email") or "").strip().lower()
+    if not email:
+        return 0
+    name = (claims.get("name") or claims.get("companyName") or email.split("@")[0])
+    uid, _ = db_find_or_create_user(str(name)[:100], email)
+    return uid
+
+
+def _auth_and_link(sid: str, body_user_id: int, authorization: Optional[str]) -> int:
+    """Resolve the user for this request: verified token wins over the body's claim.
+    When a real user is known, stamp this session's earlier guest rows with them."""
+    uid = _user_from_token(authorization) or max(body_user_id, 0)
+    if uid > 0:
+        db_migrate_guest(sid, uid)
+    return uid
+
+
 @app.post("/ask")
-def ask_post(body: ChatRequest):
+def ask_post(body: ChatRequest, authorization: Optional[str] = Header(None)):
     sid = _resolve_session(body.session_id, body.user_id)
     _guard(body.message, sid)
-    res = answer_sync(body.message, session_id=sid, user_id=max(body.user_id, 0))
-    return JSONResponse({**res, "session_id": sid})
+    uid = _auth_and_link(sid, body.user_id, authorization)
+    res = answer_sync(body.message, session_id=sid, user_id=uid)
+    return JSONResponse({**res, "session_id": sid, "user_id": uid})
 
 
 @app.get("/ask")
-def ask_get(q: str = Query(...), session_id: str = Query(""), user_id: int = Query(0)):
+def ask_get(q: str = Query(...), session_id: str = Query(""), user_id: int = Query(0),
+            authorization: Optional[str] = Header(None)):
     sid = _resolve_session(session_id, user_id)
     _guard(q, sid)
-    res = answer_sync(q, session_id=sid, user_id=max(user_id, 0))
-    return JSONResponse({**res, "session_id": sid})
+    uid = _auth_and_link(sid, user_id, authorization)
+    res = answer_sync(q, session_id=sid, user_id=uid)
+    return JSONResponse({**res, "session_id": sid, "user_id": uid})
 
 
 @app.post("/ask/stream")
-def ask_stream(body: ChatRequest):
+def ask_stream(body: ChatRequest, authorization: Optional[str] = Header(None)):
     sid = _resolve_session(body.session_id, body.user_id)
     _guard(body.message, sid)
-    uid = max(body.user_id, 0)
+    uid = _auth_and_link(sid, body.user_id, authorization)
 
     def gen():
         try:
@@ -207,6 +251,13 @@ def email_ticket(body: EmailTicketRequest):
         raise HTTPException(503, "Ticket system temporarily unavailable")
 
     db_save_email_capture(email, sid, message)
+    # LINK the session to a user record by email so the admin sees whose ticket it is.
+    # This is identification only - it never unlocks chat history in the UI
+    # (history is revealed by verified token only, see /my-history).
+    if uid == 0:
+        uid, _ = db_find_or_create_user(email.split("@")[0], email)
+    if uid > 0:
+        db_migrate_guest(sid, uid)
     try:
         mark_email_ticket(sid, email, uid)   # Nova stops asking for the email in this session
     except Exception:
@@ -234,6 +285,19 @@ def customer(body: CustomerRequest):
     if body.session_id.strip():
         db_migrate_guest(body.session_id.strip(), uid)
     return JSONResponse({"user_id": uid, "exists": existed, "session_id": f"user_{uid}"})
+
+
+@app.get("/my-history")
+def my_history(authorization: Optional[str] = Header(None)):
+    """Previous sessions for the LOGGED-IN user (chat UI sidebar). Strictly
+    token-gated: the user is whoever the verified token says - never an id the
+    frontend claims. 401 without a valid token."""
+    uid = _user_from_token(authorization)
+    if uid <= 0:
+        raise HTTPException(401, "valid login token required")
+    sessions = db_user_sessions(uid)
+    return JSONResponse({"user_id": uid, "session_count": len(sessions),
+                         "sessions": sessions})
 
 
 @app.get("/history/{user_id}")

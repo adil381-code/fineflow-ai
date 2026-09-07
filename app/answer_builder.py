@@ -267,6 +267,13 @@ def db_user_chat_all_sessions(user_id: int) -> List[Dict]:
             for sid, msgs in grouped.items()]
 
 
+def db_user_sessions(user_id: int) -> List[Dict]:
+    """User-facing history (previous sessions in the chat UI). Same grouping as the
+    admin view but no ticket requirement - gated by a VERIFIED token in api.py,
+    never by an id the frontend merely claims."""
+    return db_user_chat_all_sessions(user_id)
+
+
 def db_all_tickets() -> List[Dict]:
     """Admin view: every column of every ticket, newest first."""
     rows = db.run("SELECT * FROM tickets ORDER BY id DESC", (), fetch="all") or []
@@ -280,24 +287,15 @@ def db_all_tickets() -> List[Dict]:
 
 
 def db_migrate_guest(guest_session_id: str, user_id: int) -> None:
-    """Guest → logged-in: move chat turns and profile onto the user's session so nothing is lost."""
-    if not guest_session_id or user_id <= 0 or guest_session_id.startswith("user_"):
+    """Login (or email link) mid-chat: stamp this session's earlier rows and state
+    with the user_id. The session key NEVER changes - the conversation continues
+    untouched; the rows just now belong to a known person."""
+    if not guest_session_id or user_id <= 0:
         return
-    target = f"user_{user_id}"
-    db.run("UPDATE chat_hist SET user_id=%s, session_id=%s WHERE session_id=%s",
-           (user_id, target, guest_session_id))
-    existing = db.run("SELECT state FROM session_state WHERE session_id=%s", (target,), fetch="one")
-    guest = db.run("SELECT state FROM session_state WHERE session_id=%s", (guest_session_id,), fetch="one")
-    if guest and not existing:
-        db.run("INSERT INTO session_state (session_id,user_id,state) VALUES (%s,%s,%s)",
-               (target, user_id, guest["state"]))
-    if guest:
-        db.run("DELETE FROM session_state WHERE session_id=%s", (guest_session_id,))
-    with _MEM_LOCK:
-        if guest_session_id in _MEM_STATE and target not in _MEM_STATE:
-            _MEM_STATE[target] = _MEM_STATE.pop(guest_session_id)
-        if guest_session_id in _MEM_HIST:
-            _MEM_HIST.setdefault(target, []).extend(_MEM_HIST.pop(guest_session_id))
+    db.run("UPDATE chat_hist SET user_id=%s WHERE session_id=%s AND user_id IS NULL",
+           (user_id, guest_session_id))
+    db.run("UPDATE session_state SET user_id=%s WHERE session_id=%s",
+           (user_id, guest_session_id))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

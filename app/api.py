@@ -5,6 +5,7 @@ FineFlow Nova API
 POST /customer                  find-or-create user by email → user_id (migrates guest session if given)
 POST /ask   | GET /ask          chat, full answer in one JSON
 POST /ask/stream                chat, Server-Sent Events: {"delta": "..."} ... {"done": true, ...}
+POST /email-ticket              email form (shown on request_email=true) → row in tickets table
 GET  /history/{user_id}         full history for a logged-in user
 POST /ticket                    manual support ticket
 GET  /health                    liveness + DB + index status
@@ -17,6 +18,7 @@ Logged-in: pass user_id from /customer; session becomes user_{id}.
 
 import json
 import os
+import re
 import threading
 import time
 import uuid
@@ -30,8 +32,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.answer_builder import (
-    answer_sync, build_response_stream, db, db_create_ticket, db_find_or_create_user,
-    db_load_history, db_migrate_guest, ensure_tables,
+    answer_sync, build_response_stream, db, db_all_tickets, db_create_ticket,
+    db_find_or_create_user, db_load_history, db_migrate_guest, db_save_email_capture,
+    db_user_chat_all_sessions, db_user_has_ticket, ensure_tables, mark_email_ticket,
 )
 from app.config import ADMIN_TOKEN, CORS_ORIGINS, RATE_LIMIT_PER_MIN
 from app.logger import logger
@@ -69,6 +72,17 @@ class TicketRequest(BaseModel):
     message: str
     email: str = ""
     session_id: str = ""
+
+
+class EmailTicketRequest(BaseModel):
+    """Payload sent by the chat email form (shown when the API returned request_email=true)."""
+    email: str
+    message: str = ""
+    session_id: str = ""
+    user_id: int = 0
+
+
+_EMAIL_FORM_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 
 
 # ── Rate limit (per session, sliding minute) ─────────────────────────────────
@@ -110,9 +124,15 @@ def health():
 # ── Chat ─────────────────────────────────────────────────────────────────────
 
 def _resolve_session(session_id: str, user_id: int) -> str:
+    """The client's session_id is always the session key; user_id only tags rows.
+    (Previously user_id>0 collapsed everything to user_{id} - that's why chat_hist
+    showed 'user_1' instead of the real session ids.)"""
+    sid = session_id.strip()
+    if sid:
+        return sid
     if user_id > 0:
         return f"user_{user_id}"
-    return session_id.strip() or str(uuid.uuid4())
+    return str(uuid.uuid4())
 
 
 def _guard(message: str, sid: str):
@@ -163,6 +183,43 @@ def ask_stream(body: ChatRequest):
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+# ── Email form → ticket ──────────────────────────────────────────────────────
+
+@app.post("/email-ticket")
+def email_ticket(body: EmailTicketRequest):
+    """
+    Called by the chat email form (rendered when a chat response had request_email=true).
+    Stores a row in the tickets table with: ticket_number (generated), session_id,
+    user_id, email, message, status (defaults OPEN). Returns the ticket number.
+    Also updates the chat session state so Nova stops asking for the email.
+    """
+    email = body.email.strip().lower()
+    if not _EMAIL_FORM_RE.match(email):
+        raise HTTPException(400, "a valid email is required")
+    sid = _resolve_session(body.session_id, body.user_id)
+    if not _rate_ok(sid):
+        raise HTTPException(429, "Too many requests — slow down a little.")
+    uid = max(body.user_id, 0)
+    message = body.message.strip() or "Support enquiry submitted via chat email form"
+
+    tkt = db_create_ticket(uid, subject="", message=message, email=email, session_id=sid)
+    if tkt == "TKT-ERR":
+        raise HTTPException(503, "Ticket system temporarily unavailable")
+
+    db_save_email_capture(email, sid, message)
+    try:
+        mark_email_ticket(sid, email, uid)   # Nova stops asking for the email in this session
+    except Exception:
+        logger.exception("mark_email_ticket failed (ticket %s still created)", tkt)
+
+    logger.info("email-ticket session=%s ticket=%s email=%s", sid, tkt, email)
+    return JSONResponse({"success": True, "ticket_number": tkt, "status": "OPEN",
+                         "session_id": sid,
+                         "answer": (f"Thanks - your issue has been logged as {tkt} and the Fine Flow "
+                                    f"team will follow up at {email}. The chat stays open if you need "
+                                    f"anything else in the meantime.")})
+
+
 # ── Users / history / tickets ────────────────────────────────────────────────
 
 @app.post("/customer")
@@ -202,6 +259,32 @@ def ticket(body: TicketRequest):
 def _require_admin(token: Optional[str]):
     if ADMIN_TOKEN and token != ADMIN_TOKEN:
         raise HTTPException(401, "invalid admin token")
+
+
+@app.get("/admin/user-chat/{user_id}")
+def admin_user_chat(user_id: int, x_admin_token: Optional[str] = Header(None)):
+    """Full chat history for a user across ALL their sessions - only when that user
+    has at least one ticket in the tickets table."""
+    _require_admin(x_admin_token)
+    if user_id <= 0:
+        raise HTTPException(400, "valid user_id required")
+    if not db_user_has_ticket(user_id):
+        raise HTTPException(404, "no ticket found for this user")
+    sessions = db_user_chat_all_sessions(user_id)
+    return JSONResponse({
+        "user_id": user_id,
+        "session_count": len(sessions),
+        "total_messages": sum(s["message_count"] for s in sessions),
+        "sessions": sessions,
+    })
+
+
+@app.get("/admin/tickets")
+def admin_tickets(x_admin_token: Optional[str] = Header(None)):
+    """All rows, all columns from the tickets table, newest first."""
+    _require_admin(x_admin_token)
+    tickets = db_all_tickets()
+    return JSONResponse({"count": len(tickets), "tickets": tickets})
 
 
 @app.post("/admin/build_index")

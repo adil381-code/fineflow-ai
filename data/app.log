@@ -1849,3 +1849,348 @@ requests.exceptions.ConnectionError: HTTPSConnectionPool(host='api.openai.com', 
 2026-09-03 15:45:45,565 WARNING fineflow_nova: VERIFIER session=s_oapgjbuz violations=['Your reply is (near-)identical to your previous reply. Say something NEW: if they asked for more detail, go one level deeper (e.g. the six lifecycle stages, one clause each); otherwise pivot to a different useful angle or question. Do not restate the same sentences.', 'You already asked this exact question earlier: "I\'m here to help with fleet fine management — anything about fines, Fine Flow or appeals?". Never repeat a question. Either ask for the missing detail in clearly different words with an example, or drop the thread and pivot.']
 2026-09-03 15:46:12,239 INFO fineflow_nova: session=s_oapgjbuz q='im getting so many fines im stressed man' → search='How does the Fine Flow software manage the fine lifecycle stages, including inge'
 2026-09-03 15:46:23,389 INFO fineflow_nova: session=s_oapgjbuz q='thanks bye' → search='How does the fine lifecycle work in Fine Flow, including the stages of ingestion'
+2026-09-03 15:56:21,561 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-09-03 15:56:21,562 WARNING fineflow_nova: MySQL error (attempt 1): No module named 'pymysql'
+2026-09-03 15:56:21,563 WARNING fineflow_nova: MySQL error (attempt 2): No module named 'pymysql'
+2026-09-03 15:56:21,564 WARNING fineflow_nova: MySQL error (attempt 1): No module named 'pymysql'
+2026-09-03 15:56:21,564 WARNING fineflow_nova: MySQL error (attempt 2): No module named 'pymysql'
+2026-09-03 15:56:21,566 WARNING fineflow_nova: MySQL error (attempt 1): No module named 'pymysql'
+2026-09-03 15:56:21,566 WARNING fineflow_nova: MySQL error (attempt 2): No module named 'pymysql'
+2026-09-03 15:56:21,567 WARNING fineflow_nova: MySQL error (attempt 1): No module named 'pymysql'
+2026-09-03 15:56:21,568 WARNING fineflow_nova: MySQL error (attempt 2): No module named 'pymysql'
+2026-09-03 15:56:21,569 WARNING fineflow_nova: MySQL error (attempt 1): No module named 'pymysql'
+2026-09-03 15:56:21,569 WARNING fineflow_nova: MySQL error (attempt 2): No module named 'pymysql'
+2026-09-03 15:56:21,582 WARNING fineflow_nova: MySQL error (attempt 1): No module named 'pymysql'
+2026-09-03 15:56:21,582 WARNING fineflow_nova: MySQL error (attempt 2): No module named 'pymysql'
+2026-09-03 15:56:21,583 WARNING fineflow_nova: MySQL error (attempt 1): No module named 'pymysql'
+2026-09-03 15:56:21,584 WARNING fineflow_nova: MySQL error (attempt 2): No module named 'pymysql'
+2026-09-03 15:56:21,584 WARNING fineflow_nova: MySQL error (attempt 1): No module named 'pymysql'
+2026-09-03 15:56:21,585 WARNING fineflow_nova: MySQL error (attempt 2): No module named 'pymysql'
+2026-09-03 15:56:21,585 WARNING fineflow_nova: MySQL error (attempt 1): No module named 'pymysql'
+2026-09-03 15:56:21,586 WARNING fineflow_nova: MySQL error (attempt 2): No module named 'pymysql'
+2026-09-03 15:56:21,587 WARNING fineflow_nova: MySQL error (attempt 1): No module named 'pymysql'
+2026-09-03 15:56:21,588 WARNING fineflow_nova: MySQL error (attempt 2): No module named 'pymysql'
+2026-09-03 15:59:25,437 WARNING fineflow_nova: MySQL error (attempt 1): No module named 'pymysql'
+2026-09-03 15:59:25,439 WARNING fineflow_nova: MySQL error (attempt 2): No module named 'pymysql'
+2026-09-03 16:00:23,394 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-09-03 16:00:24,881 INFO fineflow_nova: MySQL connected
+2026-09-03 16:02:39,559 INFO fineflow_nova: session=user_1 q='test connection' → search="How do I test the connection for Fine Flow's fleet fine management software?"
+2026-09-03 16:02:43,611 INFO fineflow_nova: session=user_1 q='hi' → search='How does the fine lifecycle work in Fine Flow, specifically regarding the stages'
+2026-09-03 16:17:16,371 INFO fineflow_nova: session=session_1788434227258_jq6t09x8n q='test connection' → search='test connection'
+2026-09-03 16:17:19,111 INFO fineflow_nova: session=user_1 q='test connection' → search='How does Fine Flow manage the fine lifecycle stages including ingestion, extract'
+2026-09-03 16:24:48,218 INFO fineflow_nova: session=session_1788434664726_0zrxhdzog q='test connection' → search='test connection'
+2026-09-03 16:25:03,667 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-09-03 16:25:05,135 INFO fineflow_nova: MySQL connected
+2026-09-03 16:26:30,428 INFO fineflow_nova: session=session_1788434786665_vdyo6pu9j q='test connection' → search='test connection'
+2026-09-03 16:26:53,238 INFO fineflow_nova: session=session_1788434786665_vdyo6pu9j q='hi' → search='How does Fine Flow manage the fine lifecycle stages, including ingestion, extrac'
+2026-09-03 16:27:14,842 INFO fineflow_nova: session=session_1788434786665_vdyo6pu9j q='complete flow' → search='What are the complete stages of the fine lifecycle in Fine Flow, including inges'
+2026-09-04 10:31:32,579 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-09-04 10:31:34,252 INFO fineflow_nova: MySQL connected
+2026-09-04 10:32:13,984 WARNING fineflow_nova: MySQL error (attempt 1): (1054, "Unknown column 'msg' in 'SELECT'")
+2026-09-04 10:32:15,628 INFO fineflow_nova: MySQL connected
+2026-09-04 10:32:15,929 WARNING fineflow_nova: MySQL error (attempt 2): (1054, "Unknown column 'msg' in 'SELECT'")
+2026-09-04 10:32:19,013 INFO fineflow_nova: session=s_fvinbv9w q='hi there' → search='hi there'
+2026-09-04 10:32:20,762 WARNING fineflow_nova: VERIFIER session=s_fvinbv9w violations=["Your reply contains a banned filler phrase ('let me know' / 'feel free to ask' or similar, rule 17). Replace the reply with something real: either one fresh, specific follow-up question not yet asked, or a clean close with no question."]
+2026-09-04 10:32:23,445 INFO fineflow_nova: MySQL connected
+2026-09-04 10:32:23,816 WARNING fineflow_nova: MySQL error (attempt 1): (1054, "Unknown column 'msg' in 'INSERT INTO'")
+2026-09-04 10:32:25,354 INFO fineflow_nova: MySQL connected
+2026-09-04 10:32:25,645 WARNING fineflow_nova: MySQL error (attempt 2): (1054, "Unknown column 'msg' in 'INSERT INTO'")
+2026-09-04 10:32:27,192 INFO fineflow_nova: MySQL connected
+2026-09-04 10:32:36,307 WARNING fineflow_nova: MySQL error (attempt 1): (1054, "Unknown column 'msg' in 'SELECT'")
+2026-09-04 10:32:37,842 INFO fineflow_nova: MySQL connected
+2026-09-04 10:32:38,137 WARNING fineflow_nova: MySQL error (attempt 2): (1054, "Unknown column 'msg' in 'SELECT'")
+2026-09-04 10:32:40,104 INFO fineflow_nova: session=s_fvinbv9w q='how are you' → search='How does Fine Flow manage the fine lifecycle stages, including ingestion, extrac'
+2026-09-04 10:32:42,963 INFO fineflow_nova: MySQL connected
+2026-09-04 10:32:43,270 WARNING fineflow_nova: MySQL error (attempt 1): (1054, "Unknown column 'msg' in 'INSERT INTO'")
+2026-09-04 10:32:44,807 INFO fineflow_nova: MySQL connected
+2026-09-04 10:32:45,113 WARNING fineflow_nova: MySQL error (attempt 2): (1054, "Unknown column 'msg' in 'INSERT INTO'")
+2026-09-04 10:32:47,983 INFO fineflow_nova: MySQL connected
+2026-09-04 10:41:00,105 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-09-04 10:41:01,759 INFO fineflow_nova: MySQL connected
+2026-09-04 10:41:15,700 INFO fineflow_nova: session=s_fvinbv9w q='hi' → search='hi'
+2026-09-04 10:41:17,756 WARNING fineflow_nova: VERIFIER session=s_fvinbv9w violations=["Your reply contains a banned filler phrase ('let me know' / 'feel free to ask' or similar, rule 17). Replace the reply with something real: either one fresh, specific follow-up question not yet asked, or a clean close with no question."]
+2026-09-04 10:41:33,620 INFO fineflow_nova: session=s_fvinbv9w q='what is fineflow' → search='What is Fine Flow and how does it work in terms of fine lifecycle stages includi'
+2026-09-04 11:30:48,092 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-09-04 11:30:49,590 INFO fineflow_nova: MySQL connected
+2026-09-04 11:31:07,576 ERROR fineflow_nova: Search failed: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/embeddings
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\retriever.py", line 167, in search
+    emb = get_openai_embedding([query])[0]
+  File "D:\fineflow-rag-clean\app\retriever.py", line 45, in get_openai_embedding
+    r.raise_for_status()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/embeddings
+2026-09-04 11:31:07,610 INFO fineflow_nova: session=user_1 q='test connection' → search='test connection'
+2026-09-04 11:31:09,418 ERROR fineflow_nova: OpenAI stream error: HTTP 429: {
+    "error": {
+        "message": "You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "credit_balance_exhausted"
+    }
+}
+
+2026-09-04 11:36:44,782 ERROR fineflow_nova: OpenAI call failed: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions
+2026-09-04 11:36:45,296 ERROR fineflow_nova: Search failed: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/embeddings
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\retriever.py", line 167, in search
+    emb = get_openai_embedding([query])[0]
+  File "D:\fineflow-rag-clean\app\retriever.py", line 45, in get_openai_embedding
+    r.raise_for_status()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/embeddings
+2026-09-04 11:36:45,300 INFO fineflow_nova: session=user_1 q='test connection' → search='test connection'
+2026-09-04 11:36:46,214 ERROR fineflow_nova: OpenAI stream error: HTTP 429: {
+    "error": {
+        "message": "You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "credit_balance_exhausted"
+    }
+}
+
+2026-09-04 11:39:32,952 ERROR fineflow_nova: OpenAI call failed: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions
+2026-09-04 11:39:34,052 ERROR fineflow_nova: Search failed: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/embeddings
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\retriever.py", line 167, in search
+    emb = get_openai_embedding([query])[0]
+  File "D:\fineflow-rag-clean\app\retriever.py", line 45, in get_openai_embedding
+    r.raise_for_status()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/embeddings
+2026-09-04 11:39:34,055 INFO fineflow_nova: session=user_1 q='test connection' → search='test connection'
+2026-09-04 11:39:34,461 ERROR fineflow_nova: OpenAI stream error: HTTP 429: {
+    "error": {
+        "message": "You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "credit_balance_exhausted"
+    }
+}
+
+2026-09-04 11:40:26,484 ERROR fineflow_nova: OpenAI call failed: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions
+2026-09-04 11:40:26,781 ERROR fineflow_nova: Search failed: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/embeddings
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\retriever.py", line 167, in search
+    emb = get_openai_embedding([query])[0]
+  File "D:\fineflow-rag-clean\app\retriever.py", line 45, in get_openai_embedding
+    r.raise_for_status()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/embeddings
+2026-09-04 11:40:26,784 INFO fineflow_nova: session=user_1 q='i cant coneect my mail i have tried it multiple times help me' → search='i cant coneect my mail i have tried it multiple times help me'
+2026-09-04 11:40:27,387 ERROR fineflow_nova: OpenAI stream error: HTTP 429: {
+    "error": {
+        "message": "You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "credit_balance_exhausted"
+    }
+}
+
+2026-09-04 11:40:28,280 ERROR fineflow_nova: OpenAI call failed: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions
+2026-09-04 11:41:02,628 ERROR fineflow_nova: OpenAI call failed: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions
+2026-09-04 11:41:03,141 ERROR fineflow_nova: Search failed: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/embeddings
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\retriever.py", line 167, in search
+    emb = get_openai_embedding([query])[0]
+  File "D:\fineflow-rag-clean\app\retriever.py", line 45, in get_openai_embedding
+    r.raise_for_status()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/embeddings
+2026-09-04 11:41:03,144 INFO fineflow_nova: session=user_1 q='can i contact support team' → search='can i contact support team'
+2026-09-04 11:41:03,550 ERROR fineflow_nova: OpenAI stream error: HTTP 429: {
+    "error": {
+        "message": "You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "credit_balance_exhausted"
+    }
+}
+
+2026-09-04 11:41:14,923 ERROR fineflow_nova: OpenAI call failed: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions
+2026-09-04 11:41:15,455 ERROR fineflow_nova: Search failed: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/embeddings
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\retriever.py", line 167, in search
+    emb = get_openai_embedding([query])[0]
+  File "D:\fineflow-rag-clean\app\retriever.py", line 45, in get_openai_embedding
+    r.raise_for_status()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/embeddings
+2026-09-04 11:41:15,458 INFO fineflow_nova: session=user_1 q='still fails' → search='still fails'
+2026-09-04 11:41:16,145 ERROR fineflow_nova: OpenAI stream error: HTTP 429: {
+    "error": {
+        "message": "You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "credit_balance_exhausted"
+    }
+}
+
+2026-09-04 11:41:36,767 ERROR fineflow_nova: OpenAI call failed: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions
+2026-09-04 11:41:37,057 ERROR fineflow_nova: Search failed: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/embeddings
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\retriever.py", line 167, in search
+    emb = get_openai_embedding([query])[0]
+  File "D:\fineflow-rag-clean\app\retriever.py", line 45, in get_openai_embedding
+    r.raise_for_status()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/embeddings
+2026-09-04 11:41:37,061 INFO fineflow_nova: session=s_fvinbv9w q='hi there' → search='hi there'
+2026-09-04 11:41:37,659 ERROR fineflow_nova: OpenAI stream error: HTTP 429: {
+    "error": {
+        "message": "You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "credit_balance_exhausted"
+    }
+}
+
+2026-09-04 11:41:37,974 ERROR fineflow_nova: OpenAI call failed: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions
+2026-09-04 11:41:38,275 ERROR fineflow_nova: Search failed: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/embeddings
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\retriever.py", line 167, in search
+    emb = get_openai_embedding([query])[0]
+  File "D:\fineflow-rag-clean\app\retriever.py", line 45, in get_openai_embedding
+    r.raise_for_status()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/embeddings
+2026-09-04 11:41:38,279 INFO fineflow_nova: session=user_1 q='what is fine flow' → search='what is fine flow'
+2026-09-04 11:41:38,625 ERROR fineflow_nova: OpenAI stream error: HTTP 429: {
+    "error": {
+        "message": "You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "credit_balance_exhausted"
+    }
+}
+
+2026-09-04 11:41:54,340 ERROR fineflow_nova: OpenAI call failed: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions
+2026-09-04 11:41:54,684 ERROR fineflow_nova: Search failed: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/embeddings
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\retriever.py", line 167, in search
+    emb = get_openai_embedding([query])[0]
+  File "D:\fineflow-rag-clean\app\retriever.py", line 45, in get_openai_embedding
+    r.raise_for_status()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/embeddings
+2026-09-04 11:41:54,686 INFO fineflow_nova: session=s_fvinbv9w q='hi' → search='hi'
+2026-09-04 11:41:55,364 ERROR fineflow_nova: OpenAI stream error: HTTP 429: {
+    "error": {
+        "message": "You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "credit_balance_exhausted"
+    }
+}
+
+2026-09-04 11:41:59,563 ERROR fineflow_nova: OpenAI call failed: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions
+2026-09-04 11:42:00,075 ERROR fineflow_nova: Search failed: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/embeddings
+Traceback (most recent call last):
+  File "D:\fineflow-rag-clean\app\retriever.py", line 167, in search
+    emb = get_openai_embedding([query])[0]
+  File "D:\fineflow-rag-clean\app\retriever.py", line 45, in get_openai_embedding
+    r.raise_for_status()
+  File "D:\fineflow-rag-clean\venv\lib\site-packages\requests\models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 429 Client Error: Too Many Requests for url: https://api.openai.com/v1/embeddings
+2026-09-04 11:42:00,080 INFO fineflow_nova: session=s_fvinbv9w q='how are you' → search='how are you'
+2026-09-04 11:42:00,417 ERROR fineflow_nova: OpenAI stream error: HTTP 429: {
+    "error": {
+        "message": "You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+        "type": "insufficient_quota",
+        "param": null,
+        "code": "credit_balance_exhausted"
+    }
+}
+
+2026-09-04 12:03:29,948 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-09-04 12:03:31,558 INFO fineflow_nova: MySQL connected
+2026-09-04 12:27:25,370 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-09-04 12:27:26,848 INFO fineflow_nova: MySQL connected
+2026-09-04 12:27:52,735 INFO fineflow_nova: session=user_1 q='test connection' → search='How can I test the connection to the Fine Flow (UK fleet fine management softwar'
+2026-09-04 12:27:57,124 INFO fineflow_nova: session=user_1 q='hi' → search='What are the stages of the fine lifecycle in Fine Flow, including ingestion, ext'
+2026-09-04 12:28:22,163 INFO fineflow_nova: session=user_1 q='hi' → search='What are the stages of the fine lifecycle in Fine Flow, including ingestion, ext'
+2026-09-04 12:28:23,496 WARNING fineflow_nova: VERIFIER session=user_1 violations=['You already asked this exact question earlier: "Want to know more about how it all works?". Never repeat a question. Either ask for the missing detail in clearly different words with an example, or drop the thread and pivot.']
+2026-09-04 12:28:34,206 INFO fineflow_nova: session=user_1 q='ok' → search='What are the stages of the fine lifecycle in Fine Flow, including ingestion, ext'
+2026-09-04 12:28:49,061 INFO fineflow_nova: session=user_1 q='test connection' → search='How does Fine Flow manage the fine lifecycle stages including ingestion, extract'
+2026-09-04 12:29:00,570 INFO fineflow_nova: session=user_1 q='what is finefow' → search='What is Fine Flow and how does it manage the fine lifecycle stages including ing'
+2026-09-04 12:29:01,803 WARNING fineflow_nova: VERIFIER session=user_1 violations=['Your reply is (near-)identical to your previous reply. Say something NEW: if they asked for more detail, go one level deeper (e.g. the six lifecycle stages, one clause each); otherwise pivot to a different useful angle or question. Do not restate the same sentences.']
+2026-09-04 12:29:15,825 INFO fineflow_nova: session=user_1 q='ok' → search='What are the stages of the fine lifecycle in Fine Flow, including ingestion, ext'
+2026-09-04 12:29:48,820 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-09-04 12:29:50,281 INFO fineflow_nova: MySQL connected
+2026-09-04 12:30:10,477 INFO fineflow_nova: session=s_fvinbv9w q='hi' → search='What are the stages of the fine lifecycle in Fine Flow, including ingestion, ext'
+2026-09-04 12:30:16,773 INFO fineflow_nova: session=s_fvinbv9w q='how are you !' → search='What are the stages of the fine lifecycle in Fine Flow, including ingestion, ext'
+2026-09-04 12:30:36,295 INFO fineflow_nova: session=s_fvinbv9w q='how to uploas driver logs file' → search='How do I upload driver logs file in Fine Flow for fleet fine management?'
+2026-09-04 12:30:44,105 INFO fineflow_nova: session=user_1 q='test connection' → search='How can I test the connection for Fine Flow?'
+2026-09-04 12:30:56,363 INFO fineflow_nova: session=user_1 q='i want an custom plan how can i get tit' → search='How can I obtain a custom plan for Fine Flow?'
+2026-09-04 12:31:03,138 INFO fineflow_nova: session=s_fvinbv9w q='i followed these steps but still an error failed v' → search='What should I do if I followed the steps to upload driver logs in Fine Flow but '
+2026-09-04 12:31:23,941 INFO fineflow_nova: session=user_1 q='test connection' → search='How can I test the connection to Fine Flow and troubleshoot any issues I am expe'
+2026-09-04 12:31:25,399 WARNING fineflow_nova: VERIFIER session=user_1 violations=['You already asked this exact question earlier: "What\'s the best email for them to reach you on?". Never repeat a question. Either ask for the missing detail in clearly different words with an example, or drop the thread and pivot.']
+2026-09-04 12:31:32,757 INFO fineflow_nova: session=s_fvinbv9w q='ak4329@gmail.uk' → search='How does the Fine Flow system handle the fine lifecycle stages, including ingest'
+2026-09-04 12:31:37,732 INFO fineflow_nova: session=user_1 q='how to upload driver logs file' → search='How can I upload driver logs file in Fine Flow?'
+2026-09-04 12:31:57,621 INFO fineflow_nova: session=user_1 q='i followed this steps but still an error occured' → search='What should I do if I followed the steps to upload driver logs in Fine Flow but '
+2026-09-04 12:31:59,109 WARNING fineflow_nova: VERIFIER session=user_1 violations=['You already asked this exact question earlier: "What\'s the best email for them to reach you on?". Never repeat a question. Either ask for the missing detail in clearly different words with an example, or drop the thread and pivot.']
+2026-09-04 12:32:39,172 INFO fineflow_nova: session=s_fvinbv9w q='hi' → search='What are the stages of the fine lifecycle in Fine Flow, including ingestion, ext'
+2026-09-04 12:33:03,286 INFO fineflow_nova: session=s_fvinbv9w q='i fgailed to connect my mail in fineflow' → search='How can I resolve the issue of failing to connect my email in Fine Flow?'
+2026-09-04 12:33:19,051 INFO fineflow_nova: session=s_fvinbv9w q='still failed' → search='What steps should I take if I am still unable to connect my Gmail to Fine Flow a'
+2026-09-04 12:33:46,048 INFO fineflow_nova: session=s_fvinbv9w q='adilk3481@gmail.com' → search='How does the fine lifecycle work in Fine Flow, specifically regarding the stages'
+2026-09-04 12:33:50,760 WARNING fineflow_nova: VERIFIER session=s_fvinbv9w violations=['You already asked this exact question earlier: "Is there anything else you\'d like to know about Fine Flow while you wait?". Never repeat a question. Either ask for the missing detail in clearly different words with an example, or drop the thread and pivot.']
+2026-09-04 12:53:19,150 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-09-04 12:53:20,531 INFO fineflow_nova: MySQL connected
+2026-09-04 12:53:44,091 INFO fineflow_nova: session=user_1 q='test connection' → retrieval skipped
+2026-09-04 12:53:45,660 WARNING fineflow_nova: VERIFIER session=user_1 violations=['You already asked this exact question earlier: "What\'s the best email for them to reach you on?". Never repeat a question. Either ask for the missing detail in clearly different words with an example, or drop the thread and pivot.']
+2026-09-04 12:54:03,746 INFO fineflow_nova: session=user_1 q='test connection' → retrieval skipped
+2026-09-04 12:54:05,256 WARNING fineflow_nova: VERIFIER session=user_1 violations=['You already asked this exact question earlier: "What\'s the best email for them to reach you on?". Never repeat a question. Either ask for the missing detail in clearly different words with an example, or drop the thread and pivot.']
+2026-09-04 12:54:33,436 INFO fineflow_nova: session=user_1 q='how to connect to gmail' → search='How do I connect my Gmail account to Fine Flow using the dashboard settings?'
+2026-09-04 12:54:34,852 WARNING fineflow_nova: VERIFIER session=user_1 violations=['You already asked this exact question earlier: "What\'s the best email for them to reach you on?". Never repeat a question. Either ask for the missing detail in clearly different words with an example, or drop the thread and pivot.']
+2026-09-04 12:54:51,422 INFO fineflow_nova: session=user_1 q='i failed to connect' → search='How can I troubleshoot the failure to connect to Fine Flow when attempting to us'
+2026-09-04 12:54:52,866 WARNING fineflow_nova: VERIFIER session=user_1 violations=['You already asked this exact question earlier: "Could you confirm the email address you\'d like them to use to reach you?". Never repeat a question. Either ask for the missing detail in clearly different words with an example, or drop the thread and pivot.']
+2026-09-04 12:55:16,772 INFO fineflow_nova: session=user_1 q='i cant understand t' → search='How does the Fine Flow fine management software work, specifically regarding the'
+2026-09-04 12:55:18,016 WARNING fineflow_nova: VERIFIER session=user_1 violations=['Your reply is (near-)identical to your previous reply. Say something NEW: if they asked for more detail, go one level deeper (e.g. the six lifecycle stages, one clause each); otherwise pivot to a different useful angle or question. Do not restate the same sentences.', "Your reply contains a banned filler phrase ('let me know' / 'feel free to ask' or similar, rule 17). Replace the reply with something real: either one fresh, specific follow-up question not yet asked, or a clean close with no question."]
+2026-09-04 12:55:41,283 INFO fineflow_nova: session=user_1 q='still can connect' → search='How can I resolve ongoing connection issues with Fine Flow?'
+2026-09-04 12:55:42,696 WARNING fineflow_nova: VERIFIER session=user_1 violations=["Your reply contains a banned filler phrase ('let me know' / 'feel free to ask' or similar, rule 17). Replace the reply with something real: either one fresh, specific follow-up question not yet asked, or a clean close with no question."]
+2026-09-04 12:56:18,072 INFO fineflow_nova: session=s_w7uz89mn q='hi there' → search='hi there'
+2026-09-04 12:56:22,958 INFO fineflow_nova: session=user_1 q='how to uplaod drivers logs' → search='How do I upload driver logs in Fine Flow?'
+2026-09-04 12:56:27,990 INFO fineflow_nova: session=s_w7uz89mn q='i have an issu' → search="What should I do if I have an issue with Fine Flow's fine management software?"
+2026-09-04 12:56:29,206 INFO fineflow_nova: reconciliation: awaiting_email set in code session=s_w7uz89mn
+2026-09-04 12:56:38,815 INFO fineflow_nova: session=user_1 q='i cant upload there is an error' → search='How can I resolve the error I am encountering when trying to upload driver logs '
+2026-09-04 12:56:39,831 WARNING fineflow_nova: VERIFIER session=user_1 violations=['You already asked this exact question earlier: "Could you confirm the email address you\'d like them to use to reach you?". Never repeat a question. Either ask for the missing detail in clearly different words with an example, or drop the thread and pivot.']
+2026-09-04 12:56:40,683 INFO fineflow_nova: session=s_w7uz89mn q='i cant know how to use fineflow' → search='How do I use Fine Flow for managing the fine lifecycle stages, including ingesti'
+2026-09-04 12:56:40,940 INFO fineflow_nova: reconciliation: awaiting_email set in code session=user_1
+2026-09-04 14:30:25,659 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-09-04 14:30:27,274 INFO fineflow_nova: MySQL connected
+2026-09-04 14:36:52,609 INFO fineflow_nova: session=user_1 q='test connection' → retrieval skipped
+2026-09-04 14:36:59,525 INFO fineflow_nova: session=user_1 q='test connection' → retrieval skipped
+2026-09-04 14:37:00,809 WARNING fineflow_nova: VERIFIER session=user_1 violations=["Your reply contains a banned filler phrase ('let me know' / 'feel free to ask' or similar, rule 17). Replace the reply with something real: either one fresh, specific follow-up question not yet asked, or a clean close with no question."]
+2026-09-04 14:37:14,932 INFO fineflow_nova: session=user_1 q='hi' → retrieval skipped
+2026-09-04 14:37:29,997 INFO fineflow_nova: session=user_1 q='how to upload drivers logs' → search='How do I upload driver logs via CSV in Fine Flow?'
+2026-09-04 14:38:06,747 INFO fineflow_nova: session=user_1 q='test connection' → retrieval skipped
+2026-09-04 14:38:08,400 WARNING fineflow_nova: VERIFIER session=user_1 violations=["Your reply contains a banned filler phrase ('let me know' / 'feel free to ask' or similar, rule 17). Replace the reply with something real: either one fresh, specific follow-up question not yet asked, or a clean close with no question."]
+2026-09-04 14:38:33,338 INFO fineflow_nova: session=user_1 q='hi' → retrieval skipped
+2026-09-04 14:38:34,653 WARNING fineflow_nova: VERIFIER session=user_1 violations=['You already asked this exact question earlier: "Do you want to know about pricing, how fines are captured from Gmail, or how the appeal process works?". Never repeat a question. Either ask for the missing detail in clearly different words with an example, or drop the thread and pivot.']
+2026-09-04 14:38:59,901 INFO fineflow_nova: email-ticket session=user_1 ticket=TKT-1019 email=zainjaved1966@gmail.com
+2026-09-04 14:53:37,272 INFO fineflow_nova: session=user_1 q='adil go to' → search='How do I upload driver logs in Fine Flow using a CSV file, and what are the requ'
+2026-09-04 14:53:59,290 INFO fineflow_nova: session=user_1 q='going to' → search='How do I resolve issues with connecting Gmail to Fine Flow and uploading driver '
+2026-09-04 14:54:00,881 WARNING fineflow_nova: VERIFIER session=user_1 violations=['Your reply is (near-)identical to your previous reply. Say something NEW: if they asked for more detail, go one level deeper (e.g. the six lifecycle stages, one clause each); otherwise pivot to a different useful angle or question. Do not restate the same sentences.']
+2026-09-04 15:00:14,129 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-09-04 15:00:15,704 INFO fineflow_nova: MySQL connected
+2026-09-04 15:04:07,771 INFO fineflow_nova: session=session_1788516150056_37nwd8j7s q='test connection' → retrieval skipped
+2026-09-04 15:04:09,004 WARNING fineflow_nova: VERIFIER session=session_1788516150056_37nwd8j7s violations=["Your reply contains a banned filler phrase ('let me know' / 'feel free to ask' or similar, rule 17). Replace the reply with something real: either one fresh, specific follow-up question not yet asked, or a clean close with no question."]
+2026-09-04 15:04:11,744 INFO fineflow_nova: session=session_1788516150056_37nwd8j7s q='hi' → retrieval skipped
+2026-09-04 15:04:26,380 INFO fineflow_nova: session=session_1788516150056_37nwd8j7s q='what is fine flow' → search='What is Fine Flow and how does it manage the fine lifecycle stages including ing'
+2026-09-04 15:04:40,719 INFO fineflow_nova: session=session_1788516150056_37nwd8j7s q='how to upload driver logs' → search='How do I upload driver logs in Fine Flow?'
+2026-09-04 15:05:00,184 INFO fineflow_nova: session=session_1788516150056_37nwd8j7s q='i cant upload there is a error' → search='How can I troubleshoot and resolve errors when attempting to upload driver logs '
+2026-09-04 15:05:02,198 INFO fineflow_nova: reconciliation: awaiting_email set in code session=session_1788516150056_37nwd8j7s
+2026-09-04 15:05:41,747 INFO fineflow_nova: email-ticket session=session_1788516150056_37nwd8j7s ticket=TKT-1020 email=zain@gmail.com
+2026-09-04 15:09:30,368 INFO fineflow_nova: session=session_1788516150056_37nwd8j7s q='test connection' → retrieval skipped
+2026-09-04 15:55:08,991 INFO fineflow_nova: Retriever ready. embed_model=text-embedding-3-small chunks=31
+2026-09-04 15:55:10,551 INFO fineflow_nova: MySQL connected

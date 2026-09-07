@@ -9,7 +9,7 @@ FineFlow Nova — LLM-first conversation engine (streaming, tools, SQL memory)
 • Tools:  save_customer_details → profile persisted in MySQL
           escalate_to_team      → asks for email if none on file; logs email_capture + ticket
 • Follow-up cadence guaranteed: if the previous reply had no question, this one must end with one.
-• Memory is SQL only: chat_history (turns) + session_state (profile/summary). Chroma holds the KB only.
+• Memory is SQL only: chat_hist (turns) + session_state (profile/summary). Chroma holds the KB only.
 • Streaming: build_response_stream() yields text chunks then a final dict; build_response() wraps it.
 
 v3.6 changes (client KB v2 alignment):
@@ -140,13 +140,19 @@ _SCHEMA = [
         name VARCHAR(100), email VARCHAR(255) UNIQUE, support_id VARCHAR(100),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
-    """CREATE TABLE IF NOT EXISTS chat_history (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        session_id VARCHAR(100) NOT NULL, user_id INT DEFAULT NULL,
-        sender VARCHAR(20) NOT NULL, message TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_session (session_id), INDEX idx_user (user_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
+    """CREATE TABLE IF NOT EXISTS chat_hist (
+        id INT(11) NOT NULL AUTO_INCREMENT,
+        session_id VARCHAR(100) NOT NULL,
+        user_id INT(11) DEFAULT NULL,
+        msg TEXT NOT NULL,
+        response TEXT DEFAULT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        status BOOLEAN NOT NULL DEFAULT FALSE,
+        PRIMARY KEY (id),
+        INDEX idx_session_id (session_id),
+        INDEX idx_user_id (user_id),
+        INDEX idx_created_at (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci""",
     """CREATE TABLE IF NOT EXISTS tickets (
         id INT AUTO_INCREMENT PRIMARY KEY,
         ticket_number VARCHAR(50) UNIQUE, session_id VARCHAR(100), user_id INT DEFAULT NULL,
@@ -191,23 +197,35 @@ def db_find_or_create_user(name: str, email: str, support_id: str = "") -> Tuple
     return (int(new_id), False) if new_id else (0, False)
 
 
-def db_save_message(session_id: str, sender: str, message: str, user_id: int = 0) -> None:
-    db.run("INSERT INTO chat_history (session_id,user_id,sender,message) VALUES (%s,%s,%s,%s)",
-           (session_id, user_id or None, sender, message))
+def db_save_exchange(session_id: str, msg: str, response: str, user_id: int = 0,
+                     status: bool = False) -> None:
+    """One row per exchange: user msg + bot response together (new cPanel schema).
+    status mirrors the API's request_email flag for this exchange - TRUE when Nova
+    asked the user for their email in this reply, FALSE otherwise."""
+    db.run(
+        "INSERT INTO chat_hist (session_id,user_id,msg,response,status) VALUES (%s,%s,%s,%s,%s)",
+        (session_id, user_id or None, msg, response or None, bool(status)))
 
 
 def db_load_history(session_id: str = "", user_id: int = 0, limit: int = 40) -> List[Dict]:
+    """limit = number of EXCHANGES (rows). Each row expands back into a user + bot
+    pair so callers (model context, /history endpoint) keep the same shape as before."""
     if user_id:
         rows = db.run(
-            """SELECT sender,message FROM (SELECT sender,message,id FROM chat_history
+            """SELECT msg,response FROM (SELECT msg,response,id FROM chat_hist
                WHERE user_id=%s ORDER BY id DESC LIMIT %s) t ORDER BY id ASC""",
             (user_id, limit), fetch="all")
     else:
         rows = db.run(
-            """SELECT sender,message FROM (SELECT sender,message,id FROM chat_history
+            """SELECT msg,response FROM (SELECT msg,response,id FROM chat_hist
                WHERE session_id=%s ORDER BY id DESC LIMIT %s) t ORDER BY id ASC""",
             (session_id, limit), fetch="all")
-    return [{"sender": r["sender"], "message": r["message"]} for r in (rows or [])]
+    out: List[Dict] = []
+    for r in (rows or []):
+        out.append({"sender": "user", "message": r["msg"]})
+        if r.get("response"):
+            out.append({"sender": "bot", "message": r["response"]})
+    return out
 
 
 def db_save_email_capture(email: str, session_id: str, question: str) -> None:
@@ -228,12 +246,45 @@ def db_create_ticket(user_id: int, subject: str, message: str,
     return tkt
 
 
+def db_user_has_ticket(user_id: int) -> bool:
+    row = db.run("SELECT id FROM tickets WHERE user_id=%s LIMIT 1", (user_id,), fetch="one")
+    return bool(row)
+
+
+def db_user_chat_all_sessions(user_id: int) -> List[Dict]:
+    """Admin view: every chat_hist row for a user, grouped by session, oldest first."""
+    rows = db.run(
+        """SELECT id, session_id, user_id, msg, response, created_at, status
+           FROM chat_hist WHERE user_id=%s ORDER BY session_id, id ASC""",
+        (user_id,), fetch="all") or []
+    grouped: Dict[str, List[Dict]] = {}
+    for r in rows:
+        grouped.setdefault(r["session_id"], []).append({
+            "id": r["id"], "msg": r["msg"], "response": r["response"],
+            "created_at": str(r["created_at"]), "status": bool(r["status"]),
+        })
+    return [{"session_id": sid, "message_count": len(msgs), "messages": msgs}
+            for sid, msgs in grouped.items()]
+
+
+def db_all_tickets() -> List[Dict]:
+    """Admin view: every column of every ticket, newest first."""
+    rows = db.run("SELECT * FROM tickets ORDER BY id DESC", (), fetch="all") or []
+    out = []
+    for r in rows:
+        rec = dict(r)
+        if rec.get("created_at") is not None:
+            rec["created_at"] = str(rec["created_at"])
+        out.append(rec)
+    return out
+
+
 def db_migrate_guest(guest_session_id: str, user_id: int) -> None:
     """Guest → logged-in: move chat turns and profile onto the user's session so nothing is lost."""
     if not guest_session_id or user_id <= 0 or guest_session_id.startswith("user_"):
         return
     target = f"user_{user_id}"
-    db.run("UPDATE chat_history SET user_id=%s, session_id=%s WHERE session_id=%s",
+    db.run("UPDATE chat_hist SET user_id=%s, session_id=%s WHERE session_id=%s",
            (user_id, target, guest_session_id))
     existing = db.run("SELECT state FROM session_state WHERE session_id=%s", (target,), fetch="one")
     guest = db.run("SELECT state FROM session_state WHERE session_id=%s", (guest_session_id,), fetch="one")
@@ -339,7 +390,9 @@ def save_state(session_id: str, user_id: int, st: State) -> None:
 
 
 def load_history(session_id: str, user_id: int) -> List[Dict]:
-    rows = db_load_history(session_id, user_id, limit=CHAT_HISTORY_TURNS * 2)
+    # Memory is scoped to the SESSION (user_id=0 in the query) so rows keep real
+    # session ids; the /history/{user_id} endpoint still aggregates across sessions.
+    rows = db_load_history(session_id, 0, limit=CHAT_HISTORY_TURNS)  # exchanges
     if rows:
         return [{"role": "user" if r["sender"] == "user" else "assistant", "content": r["message"]}
                 for r in rows]
@@ -347,13 +400,30 @@ def load_history(session_id: str, user_id: int) -> List[Dict]:
         return list(_MEM_HIST.get(session_id, []))[-CHAT_HISTORY_TURNS * 2:]
 
 
-def save_turn(session_id: str, user_id: int, role: str, content: str) -> None:
+def save_exchange(session_id: str, user_id: int, msg: str, response: str,
+                  request_email: bool = False) -> None:
+    """Persist one full exchange: both sides into in-memory history, one row into MySQL.
+    request_email is stored in the status column, matching the API response flag."""
     with _MEM_LOCK:
         h = _MEM_HIST.setdefault(session_id, [])
-        h.append({"role": role, "content": content})
+        h.append({"role": "user", "content": msg})
+        if response:
+            h.append({"role": "assistant", "content": response})
         if len(h) > CHAT_HISTORY_TURNS * 4:
             _MEM_HIST[session_id] = h[-CHAT_HISTORY_TURNS * 4:]
-    db_save_message(session_id, "user" if role == "user" else "bot", content, user_id)
+    db_save_exchange(session_id, msg, response, user_id, status=request_email)
+
+
+def mark_email_ticket(session_id: str, email: str, user_id: int = 0) -> None:
+    """Called by the /email-ticket endpoint after the frontend form submits:
+    saves the email on the profile, clears the awaiting-email flag and marks the
+    session escalated so Nova stops asking for the email in chat."""
+    st = load_state(session_id)
+    st.email = (email or "").strip().lower()
+    st.awaiting_email = False
+    st.open_question = None
+    st.escalated = True
+    save_state(session_id, user_id, st)
 
 
 def _extract_question(answer: str) -> Optional[str]:
@@ -797,6 +867,23 @@ _OUTAGE = ("I'm having trouble reaching my knowledge base right now. The Fine Fl
 # Main entry — streaming generator + blocking wrapper
 # ─────────────────────────────────────────────────────────────────────────────
 
+_EMAIL_IN_TEXT = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+_ASKS_FOR_EMAIL = re.compile(
+    r"(best email|email address|email for (the )?team|email (so|to)|reach you (on|at)|share your email)", re.I)
+# Small-talk that never needs KB retrieval - saves the rewrite + embedding calls on every greeting.
+_NO_RETRIEVE = {
+    "hi", "hello", "hey", "hiya", "yo", "ok", "okay", "k", "yes", "no", "yeah", "yep", "nope",
+    "hmm", "hmmm", "right", "sure", "cool", "nice", "thanks", "thank you", "cheers", "bye",
+    "goodbye", "how are you", "how are u", "how r u", "whats up", "good morning", "good evening",
+    "test connection",
+}
+
+
+def _skip_retrieval(query: str) -> bool:
+    nq = re.sub(r"[^a-z\s]", "", query.lower()).strip()
+    return nq in _NO_RETRIEVE or len(nq) <= 2
+
+
 def build_response_stream(query: str, session_id: str = "default", user_id: int = 0
                           ) -> Generator[Union[str, Dict[str, Any]], None, None]:
     """
@@ -818,10 +905,29 @@ def build_response_stream(query: str, session_id: str = "default", user_id: int 
     history = load_history(session_id, user_id)
     st.turns += 1
 
-    # 1. Retrieval (history-aware)
-    search_q = _standalone_query(query, history, st)
-    kb_ctx, _ = retrieve_context(search_q, top_k=TOP_K)
-    logger.info("session=%s q=%r → search=%r", session_id, query[:80], search_q[:80])
+    # 0. Deterministic email capture: the user sent an email while one was awaited →
+    # escalate in CODE (ticket + email_capture guaranteed), don't rely on the model calling the tool.
+    sys_note = ""
+    email_m = _EMAIL_IN_TEXT.search(query)
+    if email_m and st.awaiting_email:
+        out = _run_tool("escalate_to_team",
+                        {"question": st.open_question or "Support enquiry", "email": email_m.group(0)},
+                        st, session_id, user_id)
+        if out.get("ok"):
+            sys_note = ("\n\nSYSTEM NOTE: the user's email " + out["email"] + " has been captured and "
+                        "ticket " + out["ticket_number"] + " has been logged for their earlier issue. "
+                        "Confirm this briefly with the ticket number, then ask one short NEW follow-up question.")
+            logger.info("code-escalation session=%s ticket=%s email=%s",
+                        session_id, out["ticket_number"], out["email"])
+
+    # 1. Retrieval (history-aware) - skipped for small talk and bare-email replies to save API calls
+    if sys_note or email_m or _skip_retrieval(query):
+        search_q, kb_ctx = query, ""
+        logger.info("session=%s q=%r → retrieval skipped", session_id, query[:80])
+    else:
+        search_q = _standalone_query(query, history, st)
+        kb_ctx, _ = retrieve_context(search_q, top_k=TOP_K)
+        logger.info("session=%s q=%r → search=%r", session_id, query[:80], search_q[:80])
 
     # 2. Messages
     system = (
@@ -836,7 +942,7 @@ def build_response_stream(query: str, session_id: str = "default", user_id: int 
                     "with it (rule 9). If every natural question has already been asked, close cleanly instead.")
     user_block = (
         f"KNOWLEDGE BASE EXCERPTS (retrieved for this message):\n{kb_ctx or '(nothing relevant found)'}"
-        f"{reminder}\n\nUSER MESSAGE:\n{query}"
+        f"{reminder}{sys_note}\n\nUSER MESSAGE:\n{query}"
     )
     msgs: List[Dict[str, Any]] = [{"role": "system", "content": system}]
     msgs.extend(history)
@@ -896,6 +1002,15 @@ def build_response_stream(query: str, session_id: str = "default", user_id: int 
     # v3.5: final deterministic gate — worst failure classes cannot pass this line.
     answer = _hard_guard(answer, st)
 
+    # v3.8: reconciliation — if the reply asks for the user's email but the model skipped the
+    # escalate tool, set awaiting_email in code so request_email/status are TRUE and the next
+    # email message triggers the deterministic escalation above.
+    if not st.awaiting_email and not st.escalated and "?" in answer and _ASKS_FOR_EMAIL.search(answer):
+        st.awaiting_email = True
+        if not st.open_question:
+            st.open_question = query[:200]
+        logger.info("reconciliation: awaiting_email set in code session=%s", session_id)
+
     # v3.2 tripwire: removed plans/prices appearing in an answer = stale KB deployed.
     if _LOCKED_VIOLATION.search(answer):
         logger.error("LOCKED-FACT VIOLATION session=%s answer=%r — £2.00 fee mentioned; "
@@ -908,14 +1023,18 @@ def build_response_stream(query: str, session_id: str = "default", user_id: int 
         st.asked_questions.append(asked_q)
         st.asked_questions = st.asked_questions[-20:]
     st.last_answer = answer
-    save_turn(session_id, user_id, "user", query)
-    save_turn(session_id, user_id, "assistant", answer)
+    # v3.9: request_email is PER-TURN - true only when THIS reply asks for the email.
+    # st.awaiting_email stays set internally so a typed email still escalates, but the
+    # form no longer re-appears (and status no longer logs 1) on every later message.
+    request_email_now = bool(st.awaiting_email and not st.escalated
+                             and _ASKS_FOR_EMAIL.search(answer))
+    save_exchange(session_id, user_id, query, answer, request_email=request_email_now)
     if st.turns % SUMMARY_EVERY_TURNS == 0:
         _update_summary(st, history + [{"role": "user", "content": query},
                                        {"role": "assistant", "content": answer}])
     save_state(session_id, user_id, st)
 
-    yield {"answer": answer, "request_email": bool(st.awaiting_email), "trigger_ticket_popup": False}
+    yield {"answer": answer, "request_email": request_email_now, "trigger_ticket_popup": False}
 
 
 def build_response(query: str, session_id: str = "default", user_id: int = 0) -> Dict[str, Any]:
